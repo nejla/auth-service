@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html ng-app="authenticate" ng-controller="AuthenticateController">
+  <!-- Copyright © 2015-2016 Nejla AB. All rights reserved. -->
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <title>Logga in</title>
+    <link href="/libs.css" rel="stylesheet" type="text/css" />
+    <script src="/libs.js" type="text/javascript"></script>
+    <script type="text/javascript">
+(function () {
+    'use strict';
+
+    var app = angular.module('authenticate', ['ui.bootstrap']);
+
+    app.factory('AuthenticationService', ['$http', '$rootScope', function ($http, $rootScope) {
+        var authenticated = false;
+
+        return {
+            login: function (user, password) {
+                return $http.post('/api/login', {
+                    password: password,
+                    user: user
+                }).then(function (result) {
+                    $rootScope.session = result;
+                    $rootScope.$broadcast('loginSucceeded', result);
+                    if (!authenticated) {
+                        authenticated = true;
+                        $rootScope.$broadcast('authenticated');
+                    }
+                    return result;
+                }, function (error) {
+                    $rootScope.$broadcast('loginFailed', error);
+                    return error;
+                });
+            },
+            logout: function () {
+                return $http.post('/api/logout').then(function (result) {
+                    $rootScope.session = null;
+                    $rootScope.$broadcast('logoutSucceeded', result);
+                    if (authenticated) {
+                        authenticated = false;
+                        $rootScope.$broadcast('notAuthenticated');
+                    }
+                    return result;
+                }, function (error) {
+                    $rootScope.$broadcast('logoutFailed', error);
+                    return error;
+                });
+            }
+        };
+    }]);
+
+    app.controller('AuthenticateController', ['$http', '$scope', '$window', 'AuthenticationService', function ($http, $scope, $window, AuthenticationService) {
+        $scope.authenticate = {
+            submit: function () {
+                AuthenticationService.login($scope.authenticate.user, $scope.authenticate.password);
+            }
+        };
+
+        $scope.$on('loginSucceeded', function () {
+            $window.location.reload(true);
+        });
+
+        $scope.$on('loginFailed', function () {
+            $scope.authenticate.error = "Felaktigt användarnamn och/eller lösenord.";
+        });
+    }]);
+})();
+    </script>
+  </head>
+  <body style="-moz-background-size: cover; -o-background-size: cover; -webkit-background-size: cover; background: url(/background.jpg) no-repeat center center fixed; background-size: cover;">
+    <div class="container">
+      <div class="panel panel-default" style="margin: 3em auto 0px; padding: 0.6em; width: 24em;">
+        <form name="authenticate.form" ng-submit="authenticate.submit()">
+          <div class="panel-body">
+            <div class="form-group">
+              <label for="authenticate-user">E-postadress</label>
+              <input autofocus class="form-control" id="authenticate-user" ng-model="authenticate.user" placeholder="E-postadress" required type="text">
+            </div>
+            <div class="form-group">
+              <label for="authenticate-password">Lösenord</label>
+              <input class="form-control" id="authenticate-password" ng-model="authenticate.password" placeholder="Lösenord" required type="password">
+            </div>
+            <uib-alert ng-if="authenticate.error" style="margin-bottom: 15px;" type="danger">{{authenticate.error}}</uib-alert>
+            <button class="btn btn-primary" ng-disabled="!authenticate.form.$valid" type="submit">Logga in</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
