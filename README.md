@@ -36,7 +36,7 @@ the authentication page of this component, add the following as well:
 
     location /index.html {
         auth_request /api/auth;
-        error_page 403 =303 /auth.html;
+        error_page 403 =200 /auth.html;
     }
 
 An example docker-compose.yml configuration for your web app would be:
