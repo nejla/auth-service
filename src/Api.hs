@@ -10,6 +10,7 @@ import           Backend
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Either
 import           Data.Traversable
+import qualified Data.Traversable as Traversable
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -97,6 +98,19 @@ serveGetUserInstancesAPI :: ConnectionPool
 serveGetUserInstancesAPI pool conf user =
   lift . runAPI pool conf $ getUserInstances user
 
+type GetUserInfoAPI = "user-info-by-token"
+                    :> Capture "token" B64Token
+                    :> Get '[JSON] ReturnUserInfo
+
+serveGetUserInfoAPI :: ConnectionPool
+                    -> Config
+                    -> Server GetUserInfoAPI
+serveGetUserInfoAPI pool conf token =  do
+  mbRUI <- lift . runAPI pool conf $ getUserInfo token
+  case mbRUI of
+   Nothing -> left err403
+   Just rui -> return rui
+
 type UserMirrorAPI = "showUser"
                    :> Header "X-User" Text
                    :> Get '[JSON] Text
@@ -111,6 +125,7 @@ apiPrx :: Proxy (    LoginAPI
                 :<|> PublicCheckTokenAPI
                 :<|> LogoutAPI
                 :<|> GetUserInstancesAPI
+                :<|> GetUserInfoAPI
                 :<|> UserMirrorAPI)
 apiPrx = Proxy
 
@@ -120,4 +135,5 @@ serveAPI pool conf = serve apiPrx $ serveLogin pool conf
                                :<|> servePublicCheckToken pool conf
                                :<|> serveLogout pool conf
                                :<|> serveGetUserInstancesAPI pool conf
+                               :<|> serveGetUserInfoAPI pool conf
                                :<|> serveUserMirror

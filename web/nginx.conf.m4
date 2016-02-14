@@ -91,6 +91,20 @@ http {
             alias /www/auth-service.js;
         }
 
+        location = /user-info {
+            set $token $cookie_token;
+            if ($token = '') {
+              set $token $http_x_token;
+            }
+            if ($token = '') {
+              return 403;
+            }
+            proxy_pass http://AUTH_SERVICE/user-info-by-token/$token/;
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+            proxy_set_header X-Original-URI $request_uri;
+        }
+
         # Locations to redirect /auth.html
 
         location = /auth.html {

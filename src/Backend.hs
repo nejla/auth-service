@@ -17,6 +17,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock
+import qualified Data.Traversable as Traversable
 import qualified Data.UUID.V4 as UUID
 import qualified Database.Esqueleto as E
 import           Database.Esqueleto hiding ((^.), from)
@@ -210,12 +211,32 @@ login Login{ loginUser = userEmail
         sendOTP twilioConf userEmail p otp
         return ()
 
+getUserByToken :: B64Token -> API (Maybe DB.User)
+getUserByToken tokenId = do
+  -- Delete expired tokens
+  now <- liftIO $ getCurrentTime
+  runDB $ P.deleteWhere [DB.TokenExpires P.<=. Just now]
+
+  user <- runDB . select . E.from $ \(user `InnerJoin` token) -> do
+    on (user E.^. DB.UserUuid ==. token E.^. DB.TokenUser)
+    where_ (token E.^. DB.TokenToken ==. val tokenId)
+    return user
+  return . fmap entityVal $ listToMaybe user
+
+getUserInfo :: B64Token -> API (Maybe ReturnUserInfo)
+getUserInfo token = do
+  mbUser <- getUserByToken token
+  Traversable.forM mbUser $ \user -> do
+    instances <- getUserInstances (user ^. DB.uuid)
+    return ReturnUserInfo { returnUserInfoId = user ^. DB.uuid
+                          , returnUserInfoEmail = user ^. email
+                          , returnUserInfoName = user ^. name
+                          , returnUserInfoPhone = user ^. phone
+                          , returnUserInfoInstances = instances
+                          }
 
 checkToken :: B64Token -> API (Maybe UserID)
-checkToken tokenId = do
-    now <- liftIO $ getCurrentTime
-    runDB $ P.deleteWhere [DB.TokenExpires P.<=. Just now]
-    fmap DB.tokenUser <$> (runDB $ P.get (DB.TokenKey tokenId))
+checkToken tokenId = fmap DB.userUuid <$> getUserByToken tokenId
 
 checkInstance  :: InstanceID -> UserID -> API (Maybe DB.UserInstance)
 checkInstance inst user = runDB $ P.get (DB.UserInstanceKey user inst)
