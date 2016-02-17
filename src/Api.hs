@@ -9,11 +9,11 @@ module Api where
 import           Backend
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Either
-import           Data.Traversable
-import qualified Data.Traversable as Traversable
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Traversable
+import qualified Data.Traversable as Traversable
 import           Database.Persist.Sql
 import           Network.Wai
 import           Servant
@@ -26,6 +26,7 @@ type LoginAPI = "login"
               :> ReqBody '[JSON] Login
               :> Post '[JSON] (Headers '[Header "X-Token" B64Token] ReturnLogin)
 
+-- Will be transformed into X-Token header and token cookie by the nginx
 serveLogin :: ConnectionPool -> Config -> Server LoginAPI
 serveLogin pool conf loginReq = loginHandler
   where

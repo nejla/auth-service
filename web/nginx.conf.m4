@@ -64,7 +64,7 @@ http {
         location = /login {
                 proxy_pass http://AUTH_SERVICE/login/;
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/";
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/; Expires=Fri, 01-Jan-2038 00:00:01 GMT";
         }
 
         location = /logout {

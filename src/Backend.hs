@@ -161,7 +161,8 @@ login Login{ loginUser = userEmail
                           Just p  -> do
                               createOTP twilioConf p userId
                               return $ Left LoginErrorOTPRequired
-                Just otp -> do
+                Just (Password otpC) -> do
+                    let otp = Password $ Text.toUpper otpC
                     otpTime <- fromIntegral . negate <$> getConfig oTPTimeoutSeconds
                     now <- liftIO getCurrentTime
                     let cutoff = otpTime `addUTCTime` now

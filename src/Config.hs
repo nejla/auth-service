@@ -1,5 +1,6 @@
 -- Copyright © 2015-2016 Nejla AB. All rights reserved.
 
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -10,6 +11,7 @@ import           Control.Monad.Logger
 import           Control.Monad.Trans
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import           Data.Char
 import qualified Data.Configurator as Conf
 import qualified Data.Configurator.Types as Conf
 import           Data.Maybe (catMaybes)
@@ -96,6 +98,18 @@ getConf :: (MonadLogger m, MonadIO m) =>
             String -> Conf.Name -> Either Text Text -> Conf.Config -> m Text
 getConf = getConfGeneric (Just . Text.pack)
 
+getConfBool :: (MonadIO m, MonadLogger m) =>
+               String
+            -> Conf.Name
+            -> Either Text Bool
+            -> Conf.Config
+            -> m Bool
+getConfBool = getConfGeneric parseBool
+  where
+    parseBool str | (map toLower $ str) == "true" = Just True
+                  | (map toLower $ str) == "false" = Just False
+                  | otherwise = Nothing
+
 loadConf :: MonadIO m => m Conf.Config
 loadConf = liftIO $ do
     mbConfPath <- lookupEnv "CONF_PATH"
@@ -146,7 +160,7 @@ getTwilioConfig conf = do
             liftIO Exit.exitFailure
 
 get2FAConf conf = do
-     tfaRequired <- getConf' "TFA_REQUIRED" "tfa.required" (Right False) conf
+     tfaRequired <- getConfBool "TFA_REQUIRED" "tfa.required" (Right False) conf
      twilioConf <- getTwilioConfig conf
      case (tfaRequired, twilioConf) of
       (True, Nothing) -> do
