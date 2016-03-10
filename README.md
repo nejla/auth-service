@@ -83,19 +83,50 @@ Other changes can be done with SQL directly.
 API
 ---
 
-Authentication is done like this:
+The process of authenticating is done or started like this:
 
     POST /api/login
     { "user": "my_email@example.com", "password": "my_password" }
 
-The above requests sets a cookie, "token". It also sets a header, "X-Token", in
-case you would rather get the token like that. As a third option, it includes
+If two-factor authentication is required, the request will cause a text message
+to be sent to the registered phone number for the user, and will result in a 499
+status code. In order to complete the authentication process, the one-time
+password code has to be sent to the login endpoint above, along with the user
+name and password.
+
+    POST /api/login
+    { "user": "my_email@example.com", "password": "my_password", "otp": "code" }
+
+One of the above login requests (which one depends on whether two-factor
+authentication is used) will, if successful, set a cookie ("token") and return a
+201 status code. The response will also include header, "X-Token", in the case
+that you would rather get the token like that. As a third option, it includes
 the token in the JSON body like so:
 
     {"token":"the_token"}
 
-You will need to set this token in future requests, either as a header or as a
-cookie.
+You will need to set this token value in future requests, either as a header
+("X-Token") or as a cookie ("token"), in order to make your requests possible to
+authenticate. You can now access the application-specific API.
+
+A GET request to /api/user-info will return some information about the currently
+authenticated user:
+
+    {
+        "id": "0bddb111-a9cd-46ee-9d39-664e7fa71889",
+        "email": "my_email@example.com",
+        "name": "John Doe",
+        "phone": null,
+        "instances": [{
+            "name": "Test",
+            "id": "de305d54-75b4-431b-adb2-eb6b9e546014"
+        }]
+    }
+
+The "id" field holds the user identifier. It's likely that you won't need to use
+this value. The instance information holds the different application instances
+that the user has access to, and will probably only be used when the single
+sign-on capabilities are used.
 
 Logging out is done like this:
 
