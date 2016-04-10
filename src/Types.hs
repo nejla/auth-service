@@ -26,17 +26,9 @@ import           Data.UUID (UUID)
 import qualified Data.UUID as UUID
 import           Database.Persist.Sql
 import           Servant
+import           Web.HttpApiData
 
 import           AuthServiceTypes
-
-
-deriving instance FromText B64Token
-
-instance FromText UUID where
-  fromText = UUID.fromText
-
-deriving instance FromText InstanceID
-deriving instance FromText UserID
 
 --------------------------------------------------------------------------------
 -- Error -----------------------------------------------------------------------

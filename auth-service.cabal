@@ -47,6 +47,7 @@ executable auth-service
                    , persistent-postgresql >= 2.2
                    , persistent-template >= 2.1
                    , random >= 1.1
+                   , servant >= 0.6
                    , servant-server >= 0.4.4
                    , text
                    , time >= 1.5

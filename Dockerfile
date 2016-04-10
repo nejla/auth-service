@@ -1,7 +1,7 @@
 # Copyright © 2015-2016 Nejla AB. All rights reserved.
 
-FROM haskell:7.10.2
-MAINTAINER LambdatradeAB
+FROM haskell:7.10
+MAINTAINER NejlaAB
 
 EXPOSE 3000
 
