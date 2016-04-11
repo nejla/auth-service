@@ -28,7 +28,7 @@ http {
 
     server {
         ifdef(`PORT',`listen PORT;',`listen 80;')
-        server_name auth-service;
+        server_name authservice;
         rewrite_log on;
         resolver 127.0.0.1;
         location / {

@@ -3,7 +3,7 @@
 FROM haskell:7.10
 MAINTAINER NejlaAB
 
-EXPOSE 3000
+EXPOSE 80
 
 RUN echo "dependencies v1" && \
     DEBIAN_FRONTEND=noninteractive apt-get update && \

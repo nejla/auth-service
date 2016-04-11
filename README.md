@@ -14,14 +14,14 @@ PostgreSQL database and user name is "postgres".
 Add this repository as a submodule, and put the following in your
 docker-compose.yml configuration (assuming one instance):
 
-    auth-service:
+    authservice:
       build: auth-service
       links:
       - database
-    auth-web:
+    authweb:
       build: auth-service/web
       links:
-      - auth-service
+      - authservice
       - server:INSTANCE_ID
 
 Volume ./auth-service/web/auth-service.include to
@@ -45,7 +45,7 @@ An example docker-compose.yml configuration for your web app would be:
     web:
       image: nginx:latest
       links:
-      - auth-web
+      - authweb
       volumes:
       - ./web/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./web/app:/www:ro
@@ -72,11 +72,11 @@ Managing users
 
 Users can be added like so:
 
-    docker exec -it app_auth_1 auth-service adduser "My Name" my_password my_email@example.com
+    docker exec -it app_authservice_1 auth-service adduser "My Name" my_password my_email@example.com
 
 Passwords can be changed like so:
 
-    docker exec -it app_auth_1 auth-service chpass my_email@example.com my_password
+    docker exec -it app_authservice_1 auth-service chpass my_email@example.com my_password
 
 Other changes can be done with SQL directly.
 

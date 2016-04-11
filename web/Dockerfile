@@ -29,7 +29,7 @@ COPY nginx.conf.m4 /nginx.conf.m4
 COPY auth.html /www/auth.html
 COPY auth-service.js /www/auth-service.js
 
-RUN m4 -DAUTH_SERVICE=auth-service:80 \
+RUN m4 -DAUTH_SERVICE=authservice:80 \
        /nginx.conf.m4 \
        > /etc/nginx/nginx.conf
 

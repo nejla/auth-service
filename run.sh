@@ -15,6 +15,6 @@ export AUTH_SERVICE_DB_DATABASE=postgres
 export AUTH_SERVICE_DB_HOST=database
 export AUTH_SERVICE_DB_USER=postgres
 
-echo "Auth-service is running!"
+echo "auth-service is running!"
 
 exec auth-service run
