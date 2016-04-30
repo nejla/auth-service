@@ -25,6 +25,7 @@ http {
     sendfile on;
     keepalive_timeout 65;
     ifdef(`ACCESS_LOG', `access_log ACCESS_LOG;')
+    client_max_body_size 0;
 
     server {
         ifdef(`PORT',`listen PORT;',`listen 80;')
