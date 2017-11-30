@@ -1,0 +1,17 @@
+resolver: lts-9.12
+
+packages:
+  - location: '.'
+  - location: '../auth-service-types'
+    extra-dep: true
+  - location:
+      git: git@git.nejla.com:nejla-ab/common.git
+      commit: 6f8b29d265b3ac199420abffd1458648727609cc
+    extra-dep: true
+
+image:
+  container:
+    name: "auth-service"
+    base: "auth-service-baseimage"
+    add:
+      docker/add: /app

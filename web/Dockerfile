@@ -1,5 +1,3 @@
-# Copyright © 2015-2016 Nejla AB. All rights reserved.
-
 FROM phusion/baseimage
 
 ENV NGINX_VERSION 1.9.10-1~trusty
@@ -11,11 +9,12 @@ RUN apt-key adv \
           >> /etc/apt/sources.list &&\
     apt-get update &&\
     apt-get install -y \
+        ca-certificates \
         dnsmasq \
         gettext-base \
         m4 \
+        netcat \
         nginx=${NGINX_VERSION} \
-        ca-certificates \
         && \
     rm -rf /var/lib/apt/lists/*
 
@@ -28,11 +27,6 @@ COPY dnsmasq.conf /etc/dnsmasq.conf
 COPY nginx.conf.m4 /nginx.conf.m4
 COPY auth.html /www/auth.html
 COPY auth-service.js /www/auth-service.js
-
-RUN m4 -DAUTH_SERVICE=authservice:80 \
-       /nginx.conf.m4 \
-       > /etc/nginx/nginx.conf
-
 COPY run.sh /app/run.sh
 
 EXPOSE 80 443

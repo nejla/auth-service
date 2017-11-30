@@ -1,0 +1,438 @@
+#!/bin/sh
+
+set -e
+
+if [[ -n $DEBUG ]]; then
+  set -x
+  CURL="curl -v"
+  SILENT=""
+else
+  CURL="curl --silent"
+  SILENT="-o /dev/null"
+fi
+
+
+# You need to have jq in path
+
+AUTHSERVICE_CONTAINER=authservice_auth-service_1
+DB_CONTAINER=authservice_database_1
+DB_HOST=database
+DB_USER=postgres
+DB_DATABASE=postgres
+WEB_HOST=localhost:8000
+API=$WEB_HOST/api
+USER=no@spam.please
+PASSWORD=pwd123
+USER2=no2@spam.please
+PASSWORD2=pwd1234
+NAME="JohnDoe"
+INSTANCE="de305d54-75b4-431b-adb2-eb6b9e546014"
+
+NOTINSTANCE="deadbeef-75b4-431b-adb2-eb6b9e546014"
+
+testing () {
+    echo -e "\e[32m$1 \e[39m"
+}
+
+fail () {
+    echo -e "\e[91mTest Failed: $1\e[39m"
+    exit 1
+}
+
+authservice () {
+   docker exec $AUTHSERVICE_CONTAINER auth-service "$@"
+}
+
+db () {
+    docker exec \
+           -i $DB_CONTAINER psql \
+           -h $DB_HOST \
+           -U $DB_USER \
+           $DB_DATABASE "$@"
+}
+
+run_db () {
+    docker exec \
+           -it $AUTHSERVICE_CONTAINER psql \
+           -h $DB_HOST \
+           -U $DB_USER \
+           $DB_DATABASE "$@"
+}
+
+
+docker_setup () {
+    db &> /dev/null <<EOF
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public
+  AUTHORIZATION postgres;
+
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+COMMENT ON SCHEMA public
+  IS 'standard public schema';
+EOF
+    authservice adduser "$USER" "$PASSWORD" "$NAME"
+    authservice adduser "$USER2" "$PASSWORD2" "$NAME" "12345"
+
+    db &> /dev/null <<EOF
+INSERT INTO "instance" VALUES ('${INSTANCE}', 'instance1');
+INSERT INTO "user_instance" VALUES ( (SELECT "uuid" FROM "user" WHERE "email" = '${USER}')
+                                   , (SELECT "uuid" FROM "instance" WHERE "name"='instance1'));
+EOF
+}
+
+get_otp () {
+OTP=$(db -qtA <<EOF
+SELECT password FROM user_otp
+  ORDER BY created DESC
+  LIMIT 1
+EOF
+   )
+}
+
+start () {
+    cabal run -- run
+}
+
+
+nginx_logs () {
+    docker exec authservice_upstream_1 cat /tmp/nginx.log
+}
+
+enter_nginx() {
+    docker exec -it authservice_upstream_1 /bin/bash
+}
+
+
+create_otp() {
+    if [[ -z $1 ]]; then
+      LOGIN_USER=$USER
+    else
+        LOGIN_USER=$1
+    fi
+    if [[ -z $2 ]]; then
+      LOGIN_PASSWORD=$PASSWORD
+    else
+        LOGIN_PASSWORD=$2
+    fi
+    RES=$($CURL -H "Content-Type: application/json" \
+                -d "{ \"user\": \"$LOGIN_USER\", \"password\": \"$LOGIN_PASSWORD\" }" \
+                http://$API/login)
+    [[ $RES == '{"error":"One time password required"}' ]] || fail "Could not create OTP: $RES"
+}
+
+login() {
+    unset TOKEN
+    if [[ -z $1 ]]; then
+      LOGIN_USER=$USER
+    else
+        LOGIN_USER=$1
+    fi
+    if [[ -z $2 ]]; then
+      LOGIN_PASSWORD=$PASSWORD
+    else
+        LOGIN_PASSWORD=$2
+    fi
+    if [[ -z $3 ]]; then
+      LOGIN_STRING="{ \"user\": \"$LOGIN_USER\", \"password\": \"$LOGIN_PASSWORD\" }"
+    else
+        LOGIN_STRING="{ \"user\": \"$LOGIN_USER\", \"password\": \"$LOGIN_PASSWORD\", \"otp\":\"$3\" }"
+    fi
+
+    RES=$($CURL -H "Content-Type: application/json" \
+                -d "$LOGIN_STRING" \
+                http://$API/login)
+
+    TOKEN=$(echo "$RES" | jq -r '.token.token')
+    [[ -n "$TOKEN" ]]
+}
+
+call() {
+    ENDPOINT=$1
+    shift
+    RES=$($CURL -XPOST \
+                -o /dev/null \
+                -w "%{http_code}" \
+                -H "X-Instance: $INSTANCE" \
+                -H "X-Token: $TOKEN" \
+                "$@" \
+                "http://$API/$ENDPOINT"\
+
+        )
+    if [[ $RES -lt 200 || $RES -gt 300 ]]; then
+       fail "Calling http://$API/$ENDPOINT failed with error code $RES"
+    fi
+}
+
+logout() {
+    $CURL -H "X-Instance: $INSTANCE" \
+          -H "X-Token: $TOKEN" \
+          http://$API/logout
+}
+
+check_upstream() {
+    RES=$($CURL -H "X-Instance: $INSTANCE" \
+                -H "X-Token: $TOKEN" \
+                http://$API/foo/index.html)
+    [[ $RES == "foo!" ]]
+}
+
+
+
+# run _local_ test
+runtest() {
+    RES="$(login)"
+    echo $RES
+    TOKEN=$(echo "$RES" | jq -r '.token.token')
+    if [[ -z "$TOKEN" ]]; then
+       echo "Could not login"
+       exit 1
+    fi
+    RES=$($CURL "http://$HOST/check-token/$INSTANCE/$TOKEN")
+    echo "$RES"
+}
+
+docker_test() {
+    docker_setup &> /dev/null
+    testing "Trying log in"
+    login || fail "could not log in"
+    testing "Checking token"
+    RES=$($CURL -o /dev/null \
+                --write-out "%{http_code}"\
+                -H "X-Token: $TOKEN" \
+                http://$API/check-token)
+    [[ $RES == "200" ]] || fail "Could not verify token got $RES"
+
+    testing "Trying to reach upstream resource"
+    RES=$($CURL -H "X-Instance: $INSTANCE" \
+                -H "X-Token: $TOKEN" \
+                http://$API/foo/index.html)
+    [[ $RES == "foo!" ]] || fail "Could not retrieve foo.html, got $RES insted"
+
+    testing "Trying to reach upstream resource without token"
+    RES=$($CURL -o /dev/null \
+                -w "%{http_code}" \
+                -H "X-Instance: $INSTANCE" \
+                http://$API/index.htm)
+    [[ $RES == "403" ]] || fail "Did not get authorization denied, instead got $RES"
+
+    testing "Trying to reach upstream resource with bogus token"
+    RES=$($CURL -o /dev/null \
+                -w "%{http_code}" \
+                -H "X-Instance: $INSTANCE" \
+                -H "X-Token: bogus$TOKEN" \
+                http://$API/index.htm)
+    [[ $RES == "403" ]] || fail "Did not get authorization denied, instead got $RES"
+
+    testing "Trying / without a token"
+    RES=$($CURL http://$WEB_HOST/ )
+    [[ $RES == "Authenticate!" ]]  || fail "Did not get redirect , instead got $RES"
+
+    testing "Trying /auth/index.html"
+    RES=$($CURL http://$WEB_HOST/auth/index.html)
+    [[ $RES == "Authenticate!" ]] || fail "Did not get auth.html, instead got $RES"
+
+    testing "Trying /auth/index.html with token"
+    RES=$($CURL -o /dev/null \
+                -w "%{http_code}" \
+                -H "X-Instance: $INSTANCE" \
+                --cookie "token=$TOKEN" \
+                http://$WEB_HOST/auth/index.html)
+    [[ $RES == "303" ]] || fail "Did not get redirect, instead got $RES"
+
+    testing "Trying to get user info"
+    RES=$($CURL --cookie "token=$TOKEN" \
+                http://$API/user-info)
+    [[ $(echo "$RES" | jq -r '.email') == "no@spam.please" ]] || fail "Could not get user info"
+
+    testing "Getting header info"
+    RES=$($CURL -I \
+                --cookie "token=$TOKEN" \
+                -H "X-Instance: $INSTANCE" \
+                http://$WEB_HOST/index.html
+       )
+    ETAG=$(echo "$RES" | tr -d '\r' | awk 'BEGIN {FS=": "}/^ETag/{print $2}')
+    LASTMOD=$(echo "$RES" \
+                   | tr -d '\r' \
+                   | awk 'BEGIN {FS=": "}/^Last-Modified/{print $2}'
+           )
+    [[ -n $ETAG ]] || fail "No ETag received"
+    [[ -n $LASTMOD ]] || fail "No Last-Modified received"
+
+    testing "Trying If-Modified-Since"
+    RES=$($CURL --cookie "token=$TOKEN" \
+                -H "X-Instance: $INSTANCE" \
+                -H "If-Modified-Since: $LASTMOD" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$WEB_HOST/index.html
+       )
+    [[ $RES == "304" ]] || fail "If-Modified-Since did not result in 304, got $RES instead"
+
+    testing "Trying If-None-Match"
+    RES=$($CURL --cookie "token=$TOKEN" \
+                -H "X-Instance: $INSTANCE" \
+                -H "If-None-Match: $ETAG" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$WEB_HOST/index.html
+       )
+    [[ $RES == "304" ]] || fail "If-None-Match did not result in 304, got $RES instead"
+
+    testing "Trying If-None-Match with non-matching ETag"
+    RES=$($CURL --cookie "token=$TOKEN" \
+                -H "X-Instance: $INSTANCE" \
+                -H "If-None-Match: \"bogus\"" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$WEB_HOST/index.html
+       )
+    [[ $RES == "200" ]] || fail "If-None-Match did not result in 304, got $RES instead"
+
+    testing "Trying If-Modified-Since + If-None-Match"
+    RES=$($CURL -H "X-Instance: $INSTANCE" \
+                --cookie "token=$TOKEN" \
+                -H "If-Modified-Since: $LASTMOD" \
+                -H "If-None-Match: $ETAG" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$WEB_HOST/index.html
+       )
+    [[ $RES == "304" ]] || fail "If-Modified-Since + If-None-Match did not result in 304, got $RES instead"
+
+    testing "Trying If-Modified-Since + If-None-Match without token"
+    RES=$($CURL -I "X-Instance: $INSTANCE" \
+                http://$WEB_HOST/index.html)
+
+    ETAG=$(echo "$RES" | tr -d '\r' | awk 'BEGIN {FS=": "}/^ETag/{print $2}')
+    LASTMOD=$(echo "$RES" \
+                   | tr -d '\r' \
+                   | awk 'BEGIN {FS=": "}/^Last-Modified/{print $2}'
+           )
+    [[ -n $ETAG ]] || fail "No ETag received: \n$RES"
+    [[ -n $LASTMOD ]] || fail "No Last-Modified received: \n$RES"
+    RES=$($CURL -H "X-Instance: $INSTANCE" \
+                -H "If-Modified-Since: $LASTMOD" \
+                -H "If-None-Match: $ETAG" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$WEB_HOST/index.html
+       )
+    [[ $RES == "304" ]] || fail "If-Modified-Since + If-None-Match did not result in 304, got $RES instead"
+
+    testing "Trying index.html without instance"
+    RES=$($CURL --cookie "token=$TOKEN" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$WEB_HOST/index.html
+       )
+    [[ $RES == "200" ]] || fail "Could not get index.html without instance"
+
+    testing "Trying index.html with wrong instance"
+    RES=$($CURL -H "X-Instance: $NOTINSTANCE" \
+                --cookie "token=$TOKEN" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$API/index.html
+       )
+    [[ $RES == "403" ]] || fail "Did not get 403, got $RES instead"
+
+    testing "Trying / without token (should fail)"
+    RES=$($CURL http://$WEB_HOST/ )
+    [[ $RES == "Authenticate!" ]] || fail "Did not receive Authenticate!, got $RES instead"
+
+    testing "Trying /index.html without token (should fail)"
+    RES=$($CURL http://$WEB_HOST/index.html )
+    [[ $RES == "Authenticate!" ]] || fail "Did not receive Authenticate!, got $RES instead"
+
+    testing "Trying /foo.html without token"
+    RES=$($CURL http://$WEB_HOST/foo.html )
+    [[ $RES == "foo!" ]] || fail "Did not receive foo!, got $RES instead"
+
+    testing "Testing otp"
+    create_otp $USER2 $PASSWORD2
+    get_otp
+    [[ -n $OTP ]] || fail "Could not get OTP"
+    OTP=$(echo $OTP | tr '[:upper:]' '[:lower:]')
+    login $USER2 $PASSWORD2 $OTP || fail "could not log in"
+
+    testing "Trying to double-use OTP"
+    create_otp $USER2 $PASSWORD2
+    get_otp
+    [[ -n $OTP ]] || fail "Could not get OTP"
+    OTP=$(echo $OTP | tr '[:upper:]' '[:lower:]')
+    login $USER2 $PASSWORD2 $OTP || fail "could not log in"
+    logout
+    login $USER2 $PASSWORD2 $OTP && fail "Double-used password"
+
+    testing "Testing logout"
+    logout
+    RES=$($CURL -H "X-Instance: $INSTANCE" \
+                -H "X-Token: $TOKEN" \
+                -o /dev/null \
+                -w "%{http_code}" \
+                http://$API/foo/index.html)
+    [[ $RES == "403" ]] || fail "Accessing resource after logout didn't lead to 403, returned $RES instead"
+
+    testing "Testing disable-sessions"
+    login || fail "could not log in"
+    OLDTOKEN=$TOKEN
+    login || fail "could not log in"
+    check_upstream || fail "Could not reach upstream"
+    call "disable-sessions"
+    check_upstream || fail "Disable-sessions disabled current session"
+    TOKEN=$OLDTOKEN
+    check_upstream && fail "Sessions where not disabled"
+
+    testing "Testing password change"
+    docker_setup &> /dev/null
+    login || fail "could not log in"
+    call "change-password" \
+         -H "Content-Type: application/json" \
+         -d "{\"oldPasword\":\"$PASSWORD\",\"newPassword\":\"$PASSWORD2\"}"
+    logout
+    login $USER $PASSWORD2 || fail "Could not login with new password"
+    login && fail "could still log on with old credentials"
+}
+
+docker_rebuild() {
+    set -e
+    cd ..
+    make down
+    make run
+}
+
+case $1 in
+    dockertest)
+        docker_test
+        ;;
+    docker)
+        docker_rebuild
+        ;;
+    setup)
+        docker_setup
+        ;;
+    login)
+        shift
+        login "$@"
+        ;;
+    nginx_rebuild_conf)
+        nginx_build_conf
+        ;;
+    nginx_logs)
+        nginx_logs
+        ;;
+    nginx_enter)
+        enter_nginx
+        ;;
+    foo)
+        footest
+        ;;
+    db)
+        run_db "$@"
+        ;;
+    *)
+        echo "usage: test.sh dockertest|docker|login|nginx_rebuild_conf|nginx_logs|nginx_enter"
+        exit 1
+        ;;
+esac

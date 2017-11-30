@@ -7,3 +7,5 @@ cabal-dev/
 TAGS
 tags
 *.tag
+/nginx.dev.conf
+/nginx.conf

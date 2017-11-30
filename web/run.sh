@@ -1,8 +1,24 @@
 #!/bin/sh
 
-# Copyright © 2015-2016 Nejla AB. All rights reserved.
+COOKIE=$(echo "$COOKIE" | tr '[:upper:]' '[:lower:]')
 
-until nc -z authservice 80; do
+if [ "$COOKIE" = "session" ]; then
+  m4 -DAUTH_SERVICE=auth-service:80 \
+     -DCOOKIE=session \
+     /nginx.conf.m4 \
+     > /etc/nginx/nginx.conf
+else if [ -z $COOKIE ] || [ "$COOKIE" = "permanent" ] ; then
+   m4 -DAUTH_SERVICE=auth-service:80 \
+      -DCOOKIE=permanent \
+     /nginx.conf.m4 \
+     > /etc/nginx/nginx.conf
+     else
+         echo "COOKIE variable must be one of 'session' or 'permanent'"
+         exit 1
+     fi
+fi
+
+until nc -z auth-service 80; do
     echo "Waiting for auth-service..."
     sleep 1
 done

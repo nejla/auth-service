@@ -1,0 +1,50 @@
+stages:
+  - prepare
+  - build
+  - test
+  - push
+
+prepare:
+  stage: prepare
+  script:
+    - make stack-deployimage
+
+build:
+  stage: build
+  before_script:
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$AUTHSERVICE_SSH_PRIVKEY")
+    - mkdir -p ~/.ssh
+    - grep "git.nejla.com" ~/.ssh/known_hosts >/dev/null
+      || (echo "$NEJLA_GIT_HOSTKEY" >> ~/.ssh/known_hosts)
+    - mkdir -p $PWD/.stack-cache
+    - '[[ -d $HOME/.stack ]] || ln -s $PWD/.stack-cache $HOME/.stack'
+  script:
+    - make all
+
+test:
+  stage: test
+  before_script:
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$AUTHSERVICE_SSH_PRIVKEY")
+    - mkdir -p ~/.ssh
+    - grep "git.nejla.com" ~/.ssh/known_hosts >/dev/null
+      || (echo "$NEJLA_GIT_HOSTKEY" >> ~/.ssh/known_hosts)
+    - mkdir -p $PWD/.stack-cache
+    - '[[ -d $HOME/.stack ]] || ln -s $PWD/.stack-cache $HOME/.stack'
+  script:
+    - make test
+
+push:
+  stage: push
+  before_script:
+    - scripts/registry-login
+
+  script:
+    - make push
+
+cache:
+  paths:
+    - '.stack-cache'
+    - 'service/.stack-work'
+  key: "auth-service"

@@ -1,15 +1,8 @@
 Dockerfile
-dist
+**/dist
 docker-compose.yml
-frontend
-index.html
-nginx.conf
-nginx.conf.m4
-test.sh
-tests
-testsetup.sh
-upstream-nginx.conf
 web
+tests
 .git
 **/.git
 .cabal-sandbox

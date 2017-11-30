@@ -1,5 +1,3 @@
-// Copyright © 2015-2016 Nejla AB. All rights reserved.
-
 function initializeAuthService(app) {
     app.factory('AuthenticationResponseObserver', ['$q', '$window', function ($q, $window) {
         return {

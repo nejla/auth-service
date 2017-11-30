@@ -1,5 +1,3 @@
-# Copyright © 2015-2016 Nejla AB. All rights reserved.
-#
 # use m4 to configure
 #
 # Example:
@@ -25,11 +23,10 @@ http {
     sendfile on;
     keepalive_timeout 65;
     ifdef(`ACCESS_LOG', `access_log ACCESS_LOG;')
-    client_max_body_size 0;
 
     server {
         ifdef(`PORT',`listen PORT;',`listen 80;')
-        server_name authservice;
+        server_name auth-service;
         rewrite_log on;
         resolver 127.0.0.1;
         location / {
@@ -47,9 +44,6 @@ http {
                 if ($token = '') {
                   set $token $http_x_token;
                 }
-                if ($token = '') {
-                  return 403;
-                }
                 set $instance $http_x_instance;
                 if ($instance = '') {
                   return 403;
@@ -60,18 +54,42 @@ http {
                 proxy_set_header X-Original-URI $request_uri;
         }
 
-        # This part is only necessary if the client doesn't contact the central
-        # auth service (e.g. for SSO)
+        define(`expire', `ifelse(COOKIE, `permanent', `; Expires=Fri, 01-Jan-2038 00:00:01 GMT;')')
         location = /login {
                 proxy_pass http://AUTH_SERVICE/login/;
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/; Expires=Fri, 01-Jan-2038 00:00:01 GMT";
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/expire";
         }
 
         location = /logout {
                 proxy_pass http://AUTH_SERVICE/logout/$cookie_token;
                 proxy_set_header X-Original-URI $request_uri;
                 add_header Set-Cookie "token=deleted; Path=/; Expires=Thu, 01-Jan-1970 00:00:01 GMT";
+
+        }
+        location = /disable-sessions {
+                set $token $cookie_token;
+                if ($token = '') {
+                  set $token $http_x_token;
+                }
+                if ($token = '') {
+                  return 403;
+                }
+                proxy_pass http://AUTH_SERVICE/disable-sessions/$token/;
+                proxy_set_header X-Original-URI $request_uri;
+
+        }
+        location = /change-password {
+                set $token $cookie_token;
+                if ($token = '') {
+                  set $token $http_x_token;
+                }
+                if ($token = '') {
+                  return 403;
+                }
+                proxy_pass http://AUTH_SERVICE/change-password/$token/;
+                proxy_set_header X-Original-URI $request_uri;
+
         }
         location = /check-token {
                 set $token $cookie_token;
@@ -87,28 +105,29 @@ http {
                 proxy_set_header X-Original-URI $request_uri;
         }
 
+
         location = /auth-service.js {
             add_header Content-Type text/javascript;
             alias /www/auth-service.js;
         }
 
         location = /user-info {
-            set $token $cookie_token;
-            if ($token = '') {
-              set $token $http_x_token;
-            }
-            if ($token = '') {
-              return 403;
-            }
-            proxy_pass http://AUTH_SERVICE/user-info-by-token/$token/;
-            proxy_pass_request_body off;
-            proxy_set_header Content-Length "";
-            proxy_set_header X-Original-URI $request_uri;
+                set $token $cookie_token;
+                if ($token = '') {
+                  set $token $http_x_token;
+                }
+                if ($token = '') {
+                  return 403;
+                }
+                proxy_pass http://AUTH_SERVICE/user-info-by-token/$token/;
+                proxy_pass_request_body off;
+                proxy_set_header Content-Length "";
+                proxy_set_header X-Original-URI $request_uri;
         }
 
         # Locations to redirect /auth.html
 
-        location = /auth.html {
+        location = /authentication/index.html {
             # Serve auth.html instead of a 404 page when auth fails
             error_page 403 =200 /authenticatehtml;
             auth_request /auth;
@@ -122,6 +141,12 @@ http {
             # Can use alias to serve a static file instead (will work correctly)
             # alias /www/skip.html;
         }
+
+        location /authentication/ {
+            root /www/ ;
+            index index.html;
+        }
+
         # Auxiliary location to redirect to / in case of success
         location @toroot {
             return 303 /;
@@ -131,7 +156,7 @@ http {
             internal;
             add_header Content-Type text/html;
             expires -1;
-            alias /www/auth.html;
+            alias /www/authentication/index.html;
         }
 
 

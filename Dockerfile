@@ -1,12 +1,16 @@
-# Copyright © 2015-2016 Nejla AB. All rights reserved.
+# @IMAGE auth-service
+# @VERSION 20170529-1
 
-FROM haskell:7.10
-MAINTAINER NejlaAB
+FROM debian:jessie
+MAINTAINER Nejla AB
 
-EXPOSE 80
+EXPOSE 3000
 
 RUN echo "dependencies v1" && \
-    DEBIAN_FRONTEND=noninteractive apt-get update && \
+    export DEBIAN_FRONTEND=noninteractive && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 575159689BEFB442 && \
+    echo 'deb http://download.fpcomplete.com/debian jessie main' > /etc/apt/sources.list.d/fpco.list && \
+    apt-get update && \
     apt-get -y install \
       g++ \
       libicu-dev \
@@ -14,23 +18,38 @@ RUN echo "dependencies v1" && \
       libstdc++-4.8-dev \
       netcat \
       postgresql-client \
+      stack \
         && \
     ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/lib/libstdc++.so && \
     rm -rf /var/lib/apt/lists/*
 
-COPY auth-service.cabal /opt/auth-service-cabal/auth-service.cabal
-RUN cd /opt/auth-service-cabal && \
-    cabal update && \
-    cabal --ignore-sandbox install --only-dep . -j4 --force-reinstall && \
+ENV STACK_RESOLVER=lts-8.15
+ENV GITLAB_HOST_KEY="git.nejla.com,88.99.82.139 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBPWj+vqKUC95tAplBsYhbJkd7j0/DKDrUriDZLD+OdH3rT31+GQmaCk+TSn0RwlCxPoK14+kRunwMHY1LYdeDoY="
+
+RUN stack setup --resolver=$STACK_RESOLVER
+
+COPY service/auth-service.cabal /opt/auth-service-cabal/auth-service.cabal
+COPY service/stack.yaml /opt/auth-service-cabal/stack.yaml
+COPY auth-service-types /opt/auth-service-types
+COPY buildkey /buildkey
+
+RUN eval $(ssh-agent) && \
+    chmod 600 /buildkey && \
+    ssh-add /buildkey && \
+    mkdir -p ~/.ssh && \
+    echo "$GITLAB_HOST_KEY" >> ~/.ssh/known_hosts && \
+    cd /opt/auth-service-cabal && \
+    stack setup --resolver=$STACK_RESOLVER && \
+    stack install --resolver=$STACK_RESOLVER --dependencies-only && \
     rm -R /opt/auth-service-cabal
 
-COPY . /opt/auth-service
+COPY service /opt/auth-service
 RUN cd /opt/auth-service && \
-    cabal --ignore-sandbox install . --force-reinstall && \
+    stack install --resolver=$STACK_RESOLVER && \
     rm -R /opt/auth-service
 
-ENV PATH /root/.cabal/bin:$PATH
+ENV PATH /root/.local/bin:$PATH
 
-COPY run.sh /run.sh
+COPY docker/add/run.sh /run.sh
 
 CMD ["sh", "/run.sh"]
