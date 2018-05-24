@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- Copyright (c) 2015 Lambdatrade AB
 -- All rights reserved
 
@@ -5,14 +6,15 @@
 
 module User where
 
+import qualified Control.Monad.Catch as Ex
 import           Control.Monad.Trans
 import           Data.Maybe
-import           Data.Text (Text)
-import qualified Data.Text as Text
+import           Data.Text           (Text)
+import qualified Data.Text           as Text
 import           System.IO
 
 import           Backend
-import qualified Persist.Schema as DB
+import qualified Persist.Schema      as DB
 import           System.Exit
 import           Types
 
@@ -45,15 +47,16 @@ fetchUser userEmail = do
 changePassword :: [String] -> API ()
 changePassword args = do
   case Text.pack <$> args of
-   [userEmail, pwd] -> do
-     usr <- fetchUser (Email userEmail)
-     res <- changeUserPassword (DB.userUuid usr) (Password pwd)
-     case res of
-      Nothing -> liftIO $ do
-          hPutStrLn stderr "chpass: Could not create password hash"
-          exitFailure
-      _ -> return ()
-   _ -> liftIO $ do
-         hPutStrLn stderr
-             "Usage: auth-service chpass <email> <password>"
-         exitFailure
+    [userEmail, pwd] -> do
+      usr <- fetchUser (Email userEmail)
+      res <- Ex.try $ changeUserPassword (DB.userUuid usr) (Password pwd)
+      case res of
+        Left (e :: ChangePasswordError) ->
+          liftIO $ do
+            hPutStrLn stderr "chpass: Could not create password hash"
+            exitFailure
+        _ -> return ()
+    _ ->
+      liftIO $ do
+        hPutStrLn stderr "Usage: auth-service chpass <email> <password>"
+        exitFailure

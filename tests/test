@@ -20,7 +20,9 @@ DB_HOST=database
 DB_USER=postgres
 DB_DATABASE=postgres
 WEB_HOST=localhost:8000
+EMAIL_HOST=localhost:8025
 API=$WEB_HOST/api
+EMAIL_API=$EMAIL_HOST/api/v1
 USER=no@spam.please
 PASSWORD=pwd123
 USER2=no2@spam.please
@@ -28,14 +30,20 @@ PASSWORD2=pwd1234
 NAME="JohnDoe"
 INSTANCE="de305d54-75b4-431b-adb2-eb6b9e546014"
 
+
 NOTINSTANCE="deadbeef-75b4-431b-adb2-eb6b9e546014"
 
 testing () {
     echo -e "\e[32m$1 \e[39m"
 }
 
+
+errmsg() {
+    echo -e "\e[91mTest Failed: $*\e[39m"
+}
+
 fail () {
-    echo -e "\e[91mTest Failed: $1\e[39m"
+    errmsg "$@"
     exit 1
 }
 
@@ -53,7 +61,7 @@ db () {
 
 run_db () {
     docker exec \
-           -it $AUTHSERVICE_CONTAINER psql \
+           -it $DB_CONTAINER psql \
            -h $DB_HOST \
            -U $DB_USER \
            $DB_DATABASE "$@"
@@ -147,20 +155,36 @@ login() {
     [[ -n "$TOKEN" ]]
 }
 
+http() {
+    tmpfile=$(mktemp --tmpdir auth-service.tmp.XXXXX) || fail "Could not make temporary file"
+    trap "rm -f $tmpfile" EXIT
+    res=$($CURL -o "$tmpfile" -w "%{http_code}" "$@")
+    if [[ "$res" -lt 200 || "$res" -gt 300 ]]; then
+      echo "http error (response code $res)"
+      echo "To reproduce : $CURL $*"
+    else
+        cat "$tmpfile"
+    fi
+}
+
 call() {
+    tmpfile=$(mktemp --tmpdir auth-service.tmp.XXXXX) || fail "Could not make temporary file"
+    trap "rm -f $tmpfile" EXIT
     ENDPOINT=$1
     shift
     RES=$($CURL -XPOST \
-                -o /dev/null \
+                -o "$tmpfile" \
                 -w "%{http_code}" \
                 -H "X-Instance: $INSTANCE" \
                 -H "X-Token: $TOKEN" \
                 "$@" \
                 "http://$API/$ENDPOINT"\
-
-        )
-    if [[ $RES -lt 200 || $RES -gt 300 ]]; then
-       fail "Calling http://$API/$ENDPOINT failed with error code $RES"
+       )
+    if [[ "$RES" -lt 200 || "$RES" -gt 300 ]]; then
+      echo "$RES when calling POST http://$API/$ENDPOINT"
+      cat "$tmpfile"
+      echo "Command was: $CURL -XPOST -H \"X-Instance: $INSTANCE\" -H \"X-Token: $TOKEN\" \"$*\" \"http://$API/$ENDPOINT"\"
+      fail "call threw error"
     fi
 }
 
@@ -175,9 +199,37 @@ check_upstream() {
                 -H "X-Token: $TOKEN" \
                 http://$API/foo/index.html)
     [[ $RES == "foo!" ]]
+
+}
+
+email() {
+    endpoint=$1
+    shift
+    $CURL "$@" "http://$EMAIL_API/$endpoint"
+}
+
+clearEmail() {
+    email messages -XDELETE -o /dev/null
 }
 
 
+# Reads the latest email and tries to extract the token; stores it in $token
+emailGetToken() {
+    tmpfile=$(mktemp --tmpdir auth-service.tmp.XXXXX) || fail "Could not make temporary file"
+    trap "rm -f $tmpfile" EXIT
+    res=$($CURL --silent -w "%{http_code}" "http://$EMAIL_API/messages" -o "$tmpfile")
+    if [[ $res -lt 200 || $res -gt 300 ]]; then
+       fail "Failed with error code $res"
+    fi
+    # This is a bit hacky, we rely on the email to contain a link of the form
+    # "?token=<token>" the "3D" is there fore MIME reasons
+
+    token=$(< "$tmpfile" \
+      jq -r '.[0] | .MIME.Parts | .[1] | .Body' \
+              | perl -n -e '/\?token=3D([[:alnum:]]+)<\/a>/ && print $1')
+    [[ -n "$token" ]] || fail "could not get token"
+
+}
 
 # run _local_ test
 runtest() {
@@ -192,7 +244,22 @@ runtest() {
     echo "$RES"
 }
 
+check_connection() {
+    res=$(curl "$WEB_HOST" --silent -o /dev/null -w "%{http_code}")
+    [[ $res = 200 ]]
+}
+
 docker_test() {
+
+    if ! check_connection; then
+      echo -n "Waiting for server to start"
+      until check_connection; do
+          sleep 1
+          echo -n "."
+      done
+      echo
+    fi
+
     docker_setup &> /dev/null
     testing "Trying log in"
     login || fail "could not log in"
@@ -393,7 +460,39 @@ docker_test() {
     logout
     login $USER $PASSWORD2 || fail "Could not login with new password"
     login && fail "could still log on with old credentials"
+
+    testing "Password reset email"
+    clearEmail
+    docker_setup &> /dev/null
+    call "request-password-reset" \
+         -H "Content-Type: application/json" \
+         -d "{\"email\": \"$USER\"}"
+    emailGetToken
+    call "reset-password" -H "Content-Type: application/json" \
+         -d "{\"token\":\"$token\", \"newPassword\":\"newpwd\"}"
+    login "$USER" "newpwd" || fail "Could not login"
+    # Check that we can't login with the old credentials
+    login && fail "password wasn't changed"
+
+    testing "Password reset info"
+    call "request-password-reset" \
+         -H "Content-Type: application/json" \
+         -d "{\"email\": \"$USER\"}"
+    emailGetToken
+    $CURL "http://$API/reset-password-info/$token"
+
+    testing "Password reset with unknown email"
+    call "request-password-reset" \
+         -H "Content-Type: application/json" \
+         -d "{\"email\": \"unknown_user@no-address.abc\"}"
+    call "request-password-reset" \
+         -H "Content-Type: application/json" \
+         -d "{\"email\": \"$USER\"}"
+    emailGetToken
+    http "http://$API/reset-password-info?token=$token"
+
 }
+
 
 docker_rebuild() {
     set -e
@@ -430,6 +529,11 @@ case $1 in
         ;;
     db)
         run_db "$@"
+        ;;
+    call)
+        # for debugging
+        shift
+        "$@"
         ;;
     *)
         echo "usage: test.sh dockertest|docker|login|nginx_rebuild_conf|nginx_logs|nginx_enter"

@@ -3,7 +3,7 @@ function initializeAuthService(app) {
         return {
             responseError: function (response) {
                 if (response.status === 403) {
-                    $window.location = '/auth.html';
+                    $window.location = '/auth/';
                 };
 
                 return $q.reject(response);

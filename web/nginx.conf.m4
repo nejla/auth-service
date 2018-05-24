@@ -17,7 +17,19 @@ events {
     worker_connections 1024;
 }
 
+
 http {
+    ifdef(`NORATELIMIT', `', `
+    limit_req_zone $binary_remote_addr zone=login:10m rate=2r/m;
+    limit_req_zone $binary_remote_addr zone=service:10m rate=5r/s;
+    limit_req zone=service burst=10;
+    limit_req_status 429; # Too Many Requests
+    ')
+    # Make sure we see the real address so we can rate limit according to it
+    set_real_ip_from 0.0.0.0/0;
+    real_ip_header  X-Forwarded-For;
+
+
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
     sendfile on;
@@ -28,7 +40,7 @@ http {
         ifdef(`PORT',`listen PORT;',`listen 80;')
         server_name auth-service;
         rewrite_log on;
-        resolver 127.0.0.1;
+        resolver 127.0.0.11;
         location / {
             auth_request /auth;
             auth_request_set $user $upstream_http_x_user;
@@ -56,6 +68,8 @@ http {
 
         define(`expire', `ifelse(COOKIE, `permanent', `; Expires=Fri, 01-Jan-2038 00:00:01 GMT;')')
         location = /login {
+                ifdef(`NORATELIMIT', `', `
+                limit_req zone=login burst=10 nodelay;')
                 proxy_pass http://AUTH_SERVICE/login/;
                 proxy_set_header X-Original-URI $request_uri;
                 add_header Set-Cookie "token=$upstream_http_x_token; Path=/expire";
@@ -80,6 +94,8 @@ http {
 
         }
         location = /change-password {
+                ifdef(`NORATELIMIT', `', `
+                limit_req zone=login burst=10 nodelay;')
                 set $token $cookie_token;
                 if ($token = '') {
                   set $token $http_x_token;
@@ -125,8 +141,30 @@ http {
                 proxy_set_header X-Original-URI $request_uri;
         }
 
-        # Locations to redirect /auth.html
+        location = /request-password-reset {
+                proxy_pass http://AUTH_SERVICE/request-password-reset/;
+                proxy_set_header X-Original-URI $request_uri;
+        }
 
+        location = /reset-password {
+                ifdef(`NORATELIMIT', `', `
+                limit_req zone=login burst=3 nodelay;')
+                proxy_pass http://AUTH_SERVICE/reset-password/;
+                proxy_set_header X-Original-URI $request_uri;
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/EXPIRE";
+        }
+
+        location = /reset-password-info {
+                ifdef(`NORATELIMIT', `', `
+                limit_req zone=login burst=3 nodelay;')
+                proxy_pass http://AUTH_SERVICE/reset-password-info/;
+                proxy_pass_request_body off;
+                proxy_set_header Content-Length "";
+                proxy_set_header X-Original-URI $request_uri;
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/EXPIRE";
+        }
+
+        # Locations to redirect /auth.html
         location = /authentication/index.html {
             # Serve auth.html instead of a 404 page when auth fails
             error_page 403 =200 /authenticatehtml;

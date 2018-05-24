@@ -30,18 +30,14 @@ import           Types
 import           User
 
 logMiddleware :: Wai.Middleware
-logMiddleware app req respond = do
-  debug $ concat
-    [ "< "
-    , fromBS (Wai.requestMethod req) , " "
-    , fromBS (Wai.rawPathInfo req)
-    ]
-  app req respond'
+logMiddleware app req respond = app req respond'
   where
     debug f = hPutStrLn stderr $ "[Info#auth-serivce]" ++ f
     respond' res = do
       debug $ concat
-        ["> "
+        [ " "
+        , fromBS (Wai.requestMethod req) , " "
+        , fromBS (Wai.rawPathInfo req) , " > "
         , show . HTTP.statusCode $ Wai.responseStatus res
         , " "
         ]

@@ -23,7 +23,7 @@ iid :: UUID
 Just iid = UUID.fromString "3afe62f4-7235-4b86-a418-923aaa4a5c28"
 
 runTest :: SpecWith Application -> IO ()
-runTest f = withApiData $ \pool conf -> do
+runTest f = withApiData Nothing $ \pool conf -> do
   _ <- runAPI pool conf $ addInstance (Just $ InstanceID iid) "instance1"
   hspec $ with (return $ Api.serveAPI pool conf) f
 

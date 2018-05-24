@@ -31,6 +31,8 @@ import Database.Persist.TH
 import Types
 import Persist.Stage ()
 
+import NejlaCommon
+
 share [ mkPersist sqlSettings, mkMigrate "migrateAll"]
     $(persistFileWith lowerCaseSettings "src/schema")
 
@@ -39,3 +41,6 @@ makeLensesWith camelCaseFields ''Instance
 makeLensesWith camelCaseFields ''UserOtp
 makeLensesWith camelCaseFields ''UserInstance
 makeLensesWith camelCaseFields ''Token
+
+instance ForeignKey PasswordResetToken User where
+  foreignPair = ForeignPair PasswordResetTokenUser UserUuid

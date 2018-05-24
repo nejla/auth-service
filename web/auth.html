@@ -1,5 +1,5 @@
-<!DOCTYPE html>
 <html ng-app="authenticate" ng-controller="AuthenticateController">
+  <!-- Copyright © 2015-2016 Nejla AB. All rights reserved. -->
   <head>
     <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
     <title>Logga in</title>
@@ -15,11 +15,17 @@
         var authenticated = false;
 
         return {
-            login: function (user, password) {
-                return $http.post('/api/login', {
+            login: function (user, password, otp) {
+                var data = {
                     password: password,
                     user: user
-                }).then(function (result) {
+                };
+
+                if (otp !== null) {
+                    data.otp = otp;
+                }
+
+                return $http.post('/api/login', data).then(function (result) {
                     $rootScope.session = result;
                     $rootScope.$broadcast('loginSucceeded', result);
                     if (!authenticated) {
@@ -28,7 +34,11 @@
                     }
                     return result;
                 }, function (error) {
-                    $rootScope.$broadcast('loginFailed', error);
+                    if (error.status === 499) {
+                        $rootScope.$broadcast('otpRequired');
+                    } else {
+                        $rootScope.$broadcast('loginFailed', error);
+                    }
                     return error;
                 });
             },
@@ -49,15 +59,25 @@
         };
     }]);
 
-    app.controller('AuthenticateController', ['$http', '$scope', '$window', 'AuthenticationService', function ($http, $scope, $window, AuthenticationService) {
+    app.controller('AuthenticateController', ['$http', '$scope', '$timeout', '$window', 'AuthenticationService', function ($http, $scope, $timeout, $window, AuthenticationService) {
         $scope.authenticate = {
+            cancel: function () {
+                $scope.authenticate.otp = null;
+                $timeout(function () { document.getElementById("authenticate-user").focus(); });
+            },
+            otp: null,
             submit: function () {
-                AuthenticationService.login($scope.authenticate.user, $scope.authenticate.password);
+                AuthenticationService.login($scope.authenticate.user, $scope.authenticate.password, $scope.authenticate.otp);
             }
         };
 
         $scope.$on('loginSucceeded', function () {
             $window.location.reload(true);
+        });
+
+        $scope.$on('otpRequired', function () {
+            $scope.authenticate.otp = '';
+            $timeout(function () { document.getElementById("authenticate-otp").focus(); });
         });
 
         $scope.$on('loginFailed', function () {
@@ -74,14 +94,19 @@
           <div class="panel-body">
             <div class="form-group">
               <label for="authenticate-user">E-postadress</label>
-              <input autofocus class="form-control" id="authenticate-user" ng-model="authenticate.user" placeholder="E-postadress" required type="text">
+              <input autofocus class="form-control" id="authenticate-user" ng-disabled="authenticate.otp !== null" ng-model="authenticate.user" placeholder="E-postadress" required type="text">
             </div>
             <div class="form-group">
               <label for="authenticate-password">Lösenord</label>
-              <input class="form-control" id="authenticate-password" ng-model="authenticate.password" placeholder="Lösenord" required type="password">
+              <input class="form-control" id="authenticate-password" ng-disabled="authenticate.otp !== null" ng-model="authenticate.password" placeholder="Lösenord" required type="password">
+            </div>
+            <div class="form-group" ng-if="authenticate.otp !== null">
+              <label for="authenticate-otp">SMS-kod</label>
+              <input autocomplete="off" class="form-control" id="authenticate-otp" ng-model="authenticate.otp" placeholder="SMS-kod" required type="password">
             </div>
             <uib-alert ng-if="authenticate.error" style="margin-bottom: 15px;" type="danger">{{authenticate.error}}</uib-alert>
             <button class="btn btn-primary" ng-disabled="!authenticate.form.$valid" type="submit">Logga in</button>
+            <button class="btn btn-warning" ng-click="authenticate.cancel()" ng-if="authenticate.otp !== null" style="float: right;" type="button">Avbryt</button>
           </div>
         </form>
       </div>

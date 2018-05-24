@@ -11,6 +11,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StrictData #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -20,17 +21,28 @@ module Types
   ) where
 
 import           Control.Lens
+import qualified Control.Monad.Catch  as Ex
 import           Control.Monad.Reader
 import           Data.Default
-import           Data.Text (Text)
+import           Data.Text            (Text)
+import           Data.Typeable
 import           Database.Persist.Sql
-import qualified NejlaCommon as NC
+import qualified NejlaCommon          as NC
+import           Network.Mail.Mime    (Address)
+import qualified Text.Microstache     as Mustache
 
 import           AuthService.Types
 
 --------------------------------------------------------------------------------
 -- Error -----------------------------------------------------------------------
 --------------------------------------------------------------------------------
+
+data EmailError = EmailErrorNotConfigured
+                | EmailRenderError
+                | EmailAddressUnknownError
+                deriving (Show, Eq, Typeable)
+
+instance Ex.Exception EmailError
 
 data LoginError = LoginErrorFailed -- Username not found, password wrong or OTP
                                    -- wrong
@@ -43,40 +55,78 @@ makePrisms ''LoginError
 data ChangePasswordError = ChangePasswordLoginError LoginError
                          | ChangePasswordTokenError
                          | ChangePasswordHashError
-                           deriving (Show, Eq)
+                         | ChangePasswordUserDoesNotExistError
+                           deriving (Show, Eq, Typeable)
+
+instance Ex.Exception ChangePasswordError
 
 makePrisms ''ChangePasswordError
 
 --------------------------------------------------------------------------------
 -- Config ----------------------------------------------------------------------
 --------------------------------------------------------------------------------
+type PwResetToken = Text
+
+data TwilioConfig = TwilioConfig
+  { twilioConfigAccount      :: Text
+  , twilioConfigAuthToken    :: Text
+  , twilioConfigSourceNumber :: Text
+  } deriving (Show)
 
 
-data TwilioConfig = TwilioConfig { twilioConfigAccount :: !Text
-                                 , twilioConfigAuthToken :: !Text
-                                 , twilioConfigSourceNumber :: !Text
-                                 } deriving Show
+data SendmailConfig =
+  SendmailConfig
+  { sendmailConfigPath :: String
+  , sendmailConfigArguments :: [String]
+  } deriving Show
 
-makeLensesWith camelCaseFields ''TwilioConfig
+instance Default SendmailConfig where
+  def =
+    SendmailConfig
+    { sendmailConfigPath = "/usr/sbin/sendmail"
+    , sendmailConfigArguments = ["-t"]
+    }
 
-data Config = Config { configTimeout :: !Integer -- token timeout in seconds
-                     , configOTPLength :: !Int
-                     , configOTPTimeoutSeconds :: !Integer
-                     , configTFARequired :: !Bool
-                     , configTwilio :: !(Maybe TwilioConfig)
-                     , configUseTransactionLevels :: !Bool
-                     } deriving Show
+data EmailConfig = EmailConfig
+  { emailConfigHost :: Text
+  , emailConfigPort :: Int
+  , emailConfigFrom :: Address
+  , emailConfigUser :: Text
+  , emailConfigPassword :: Text
+  , emailConfigPWResetTemplate :: Mustache.Template
+  , emailConfigPWResetUnknownTemplate :: Mustache.Template
+  , emailConfigSendmail :: SendmailConfig
+  , emailConfigSiteName :: Text
+  , emailConfigResetLinkExpirationTime :: Text
+  , emailConfigMkLink :: PwResetToken -> Text -- ^ Generate a link from a token
+  }
 
-makeLensesWith camelCaseFields ''Config
+type OtpHandler = Phone -> Text -> API ()
+
+data Config = Config
+  { configTimeout              :: Integer -- token timeout in seconds
+  , configOTPLength            :: Int
+  , configOTPTimeoutSeconds    :: Integer
+  , configTFARequired          :: Bool
+  , configOtp                  :: Maybe OtpHandler
+  , configUseTransactionLevels :: Bool
+  , configEmail                :: Maybe EmailConfig
+  }
+
+-- | Necessary data to fill in a password reset email
+data EmailData =
+  EmailData
+  { emailDataSiteName       :: Text
+  , emailDataLink           :: Text
+  , emailDataExpirationTime :: Text
+  } deriving (Show)
 
 --------------------------------------------------------------------------------
 -- Monad -----------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-data ApiState = ApiState { apiStateConfig :: Config
-                         }
-
-makeLensesWith camelCaseFields ''ApiState
+newtype ApiState = ApiState { apiStateConfig :: Config
+                            }
 
 type API a = NC.App ApiState 'NC.Privileged 'NC.ReadCommitted a
 
@@ -85,7 +135,14 @@ type API a = NC.App ApiState 'NC.Privileged 'NC.ReadCommitted a
 --                        , MonadThrow, MonadCatch)
 
 runDB :: ReaderT SqlBackend IO a -> API a
-runDB m = NC.db' m
+runDB = NC.db'
+
+makeLensesWith camelCaseFields ''ApiState
+makeLensesWith camelCaseFields ''EmailData
+makeLensesWith camelCaseFields ''Config
+makeLensesWith camelCaseFields ''EmailConfig
+makeLensesWith camelCaseFields ''SendmailConfig
+makeLensesWith camelCaseFields ''TwilioConfig
 
 getConfig ::  Lens' Config a -> API a
 getConfig g = NC.viewState $ config . g

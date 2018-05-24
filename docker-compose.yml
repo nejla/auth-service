@@ -10,11 +10,23 @@ services:
     image: registry.nejla.com/nejla-ab/auth-service/auth-service
     links:
       - database
+      - mail
     environment:
       - log=true
       - TWILIO_ACCOUNT=
       - TWILIO_TOKEN=
       - TWILIO_SOURCE=
+      - EMAIL_FROM=authservicetest@no.email
+      - EMAIL_USER=testuser
+      - EMAIL_SMTP=mail
+      - EMAIL_PORT=1025
+      - EMAIL_PASSWORD=nopasswd
+      - EMAIL_LINK_TEMPLATE=http://localhost/pwreset?token=%s
+      - EMAIL_TLS=false
+      - EMAIL_AUTH=false
+      - SITE_NAME=authservice-test.com
+      - RESET_LINK_EXPIRATION_TIME=24 hours
+
     # logging:
     #   driver: gelf
     #   options:
@@ -23,7 +35,7 @@ services:
       - auth-service
     command: /app/run.sh
 
-  # One or more application container`
+  # One or more application containers
   upstream:
     image: nginx:latest
     volumes:
@@ -42,10 +54,11 @@ services:
     environment:
   #   - COOKIE=session
       - COOKIE=permanent
+      - NORATELIMIT
     networks:
       - auth-service
     # This volume is NOT necessary, it is only to make the tests go through. The
-    # actual auth.html is backed into the image
+    # actual auth.html is bcked into the image
     volumes:
       - ./frontend/auth.html:/www/authentication/index.html
 
@@ -63,6 +76,16 @@ services:
       - auth-web
     networks:
       - auth-service
+
+  mail:
+    image: mailhog/mailhog
+    networks:
+      - auth-service
+    environment:
+      - MH_SMTP_BIND_ADDR=0.0.0.0:1025
+      - MH_HOSTNAME=authservice.test
+    ports:
+      - 8025:8025
 
 networks:
   auth-service:

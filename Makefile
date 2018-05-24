@@ -9,14 +9,23 @@ SERVICE_IMAGE=$(REGISTRY)/$(APP_IMAGE_NAME)
 WEB_IMAGE=$(REGISTRY)/$(WEB_IMAGE_NAME)
 
 all: service-container auth-web-container
+	docker-compose build
 
 build:
 	cd service &&\
 	stack build --install-ghc --test --no-run-tests
 
-test:
+test: unittests systemtests
+
+unittests:
 	cd service &&\
 	stack test
+
+systemtests: export NORATELIMIT=true
+systemtests:
+	docker-compose up -d
+	tests/test dockertest
+	make down
 
 service-container: build stack-deployimage
 	cd service && \
@@ -48,4 +57,4 @@ push:
 	docker push $(SERVICE_IMAGE):$(TAG)
 	docker push $(SERVICE_IMAGE):latest
 
-.PHONY: all build run up down push stack-deployimage service-container auth-web-container
+.PHONY: all build run up down push stack-deployimage service-container auth-web-container unittests systemtests test

@@ -61,6 +61,8 @@ data Event
           , tokenId :: !TokenRef
           }
   | UserCreated {user :: !Email }
+  | PasswordResetRequested {user :: !Email }
+  | PasswordResetCompleted {user :: !Email, token :: !Text}
   | PasswordChangeFailed {user :: !Email }
   | PasswordChanged {user :: !Email }
   deriving (Show)
@@ -86,6 +88,10 @@ instance IsLogEvent Event where
     eventDetails "logout" v
   toLogEvent v@UserCreated{}            =
     eventDetails "user_created" v
+  toLogEvent v@PasswordResetRequested{} =
+    eventDetails "password_reset_requested" v
+  toLogEvent v@PasswordResetCompleted{} =
+    eventDetails "password_reset_completed" v
   toLogEvent v@PasswordChangeFailed{}   =
     eventDetails "password_change_failed" v
   toLogEvent v@PasswordChanged{}        =

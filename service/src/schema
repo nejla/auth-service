@@ -6,12 +6,14 @@ User
   name Name
   passwordHash PasswordHash
   phone Phone Maybe
+  deriving Show
 
 Instance
   uuid InstanceID
   Primary uuid
   name Text
   UniqueInstanceName name
+  deriving Show
 
 UserOtp
   user UserID
@@ -19,6 +21,7 @@ UserOtp
   password Password
   created UTCTime
   deactivated UTCTime Maybe
+  deriving Show
 
 UserInstance
   user UserID
@@ -26,6 +29,7 @@ UserInstance
   instanceId InstanceID
   Foreign Instance fkInstance instanceId
   Primary user instanceId
+  deriving Show
 
 Token
   token B64Token
@@ -36,3 +40,14 @@ Token
   expires UTCTime Maybe
   lastUse UTCTime Maybe
   deactivated UTCTime Maybe
+  deriving Show
+
+PasswordResetToken
+  token PwResetToken
+  UniquePasswordResetToken token
+  user UserID
+  Foreign User fkUser user
+  created UTCTime
+  expires UTCTime
+  used UTCTime Maybe
+  deriving Show

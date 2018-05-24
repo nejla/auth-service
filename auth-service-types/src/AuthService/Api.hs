@@ -15,16 +15,16 @@ type LoginAPI = "login"
 
 type LogoutAPI = "logout"
                :> Capture "token" B64Token
-               :> Post '[JSON] ()
+               :> Post '[JSON] NoContent
 
 type DisableSessionsAPI = "disable-sessions"
                        :> Capture "token" B64Token
-                       :> Post '[JSON] ()
+                       :> Post '[JSON] NoContent
 
 type ChangePasswordAPI = "change-password"
                        :> Capture "token" B64Token
                        :> ReqBody '[JSON] ChangePassword
-                       :> Post '[JSON] ()
+                       :> Post '[JSON] NoContent
 
 type CheckTokenAPI = "check-token"
                   :> Capture "token" B64Token
@@ -34,7 +34,7 @@ type CheckTokenAPI = "check-token"
 
 type PublicCheckTokenAPI = "check-token"
                         :> Capture "token" B64Token
-                        :> Get '[JSON] ()
+                        :> Get '[JSON] NoContent
 
 type GetUserInstancesAPI = "user-instances"
                          :> Capture "user" UserID
@@ -43,6 +43,19 @@ type GetUserInstancesAPI = "user-instances"
 type GetUserInfoAPI = "user-info-by-token"
                     :> Capture "token" B64Token
                     :> Get '[JSON] ReturnUserInfo
+
+type RequestPasswordResetAPI =  "request-password-reset"
+                             :> ReqBody '[JSON] PasswordResetRequest
+                             :> Post '[JSON] NoContent
+
+type PasswordResetAPI =  "reset-password"
+                      :> ReqBody '[JSON] PasswordReset
+                      :> Post '[JSON] NoContent
+
+type PasswordResetInfoAPI =  "reset-password-info"
+                             :> QueryParam "token" Text
+                             :> Get '[JSON] ResetTokenInfo
+
 
 --------------------------------------------------------------------------------
 -- Admin Interface -------------------------------------------------------------
@@ -65,3 +78,6 @@ type Api = LoginAPI
            :<|> GetUserInstancesAPI
            :<|> GetUserInfoAPI
            :<|> AdminAPI
+           :<|> RequestPasswordResetAPI
+           :<|> PasswordResetAPI
+           :<|> PasswordResetInfoAPI

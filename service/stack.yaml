@@ -1,4 +1,4 @@
-resolver: lts-9.12
+resolver: lts-10.3
 
 packages:
   - location: '.'
@@ -6,7 +6,7 @@ packages:
     extra-dep: true
   - location:
       git: git@git.nejla.com:nejla-ab/common.git
-      commit: 6f8b29d265b3ac199420abffd1458648727609cc
+      commit: 2fc66571821282993095a13dd2d97329c0a68ac0
     extra-dep: true
 
 image:
