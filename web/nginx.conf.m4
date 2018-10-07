@@ -29,6 +29,7 @@ http {
     set_real_ip_from 0.0.0.0/0;
     real_ip_header  X-Forwarded-For;
 
+    client_max_body_size 0;
 
     include /etc/nginx/mime.types;
     default_type application/octet-stream;

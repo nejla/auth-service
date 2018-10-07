@@ -4,6 +4,7 @@ FROM nginx
 RUN apt-get update &&\
     apt-get install -y \
         ca-certificates \
+        curl \
         dnsmasq \
         gettext-base \
         m4 \
