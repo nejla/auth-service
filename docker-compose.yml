@@ -26,6 +26,8 @@ services:
       - EMAIL_AUTH=false
       - SITE_NAME=authservice-test.com
       - RESET_LINK_EXPIRATION_TIME=24 hours
+      - ACCOUNT_CREATION=true
+      - DEFAULT_INSTANCE=de305d54-75b4-431b-adb2-eb6b9e546014
 
     # logging:
     #   driver: gelf
@@ -37,7 +39,7 @@ services:
 
   # One or more application containers
   upstream:
-    image: nginx:latest
+    image: nginx:perl
     volumes:
       - ./tests/index.html:/www/index.html
       - ./tests/foo.html:/www/foo/index.html
@@ -54,7 +56,7 @@ services:
     environment:
   #   - COOKIE=session
       - COOKIE=permanent
-      - NORATELIMIT
+      - NORATELIMIT=true
     networks:
       - auth-service
     # This volume is NOT necessary, it is only to make the tests go through. The

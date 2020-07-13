@@ -1,15 +1,9 @@
-image: philonous/stack-build:latest
+image: nejla/haskell-build
 
 stages:
-  - prepare
   - build
   - test
   - push
-
-prepare:
-  stage: prepare
-  script:
-    - make stack-deployimage
 
 build:
   stage: build

@@ -26,3 +26,4 @@ COPY run.sh /app/run.sh
 EXPOSE 80 443
 
 CMD ["sh", "/app/run.sh"]
+HEALTHCHECK CMD service nginx status || exit 1

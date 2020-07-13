@@ -9,3 +9,7 @@ tags
 *.tag
 /nginx.dev.conf
 /nginx.conf
+/service/image
+**/.stack-work
+service/*.cabal
+**/stack.yaml.lock

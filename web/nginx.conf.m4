@@ -29,6 +29,13 @@ http {
     set_real_ip_from 0.0.0.0/0;
     real_ip_header  X-Forwarded-For;
 
+    # [1] (See [1] later)
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+
     client_max_body_size 0;
 
     include /etc/nginx/mime.types;
@@ -44,12 +51,28 @@ http {
         resolver 127.0.0.11;
         location / {
             auth_request /auth;
-            auth_request_set $user $upstream_http_x_user;
+            auth_request_set $user $upstream_http_x_user_id;
+            auth_request_set $useremail $upstream_http_x_user_email;
+            auth_request_set $roles $upstream_http_x_roles;
             # The variable $user now contains the username when the check was
             # successful
             proxy_pass http://$http_x_instance;
-            proxy_set_header X-User $user;
+            proxy_set_header X-User-ID $user;
+            proxy_set_header X-User-Email $useremail;
+            proxy_set_header X-Roles $roles;
             proxy_set_header X-Original-URI $request_uri;
+
+            # [1] Set the "Upgrade" and "Connection" headers when we receive
+            # them We have to manually pass them through because those headers
+            # are "per-hop".
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+
+            # Increase timeouts to 5 minutes.
+            proxy_send_timeout 300;
+            proxy_read_timeout 300;
+            send_timeout 300;
+
         }
 
         location = /auth {
@@ -57,6 +80,10 @@ http {
                 if ($token = '') {
                   set $token $http_x_token;
                 }
+                if ($token = '') {
+                  return 403;
+                }
+
                 set $instance $http_x_instance;
                 if ($instance = '') {
                   return 403;
@@ -65,6 +92,7 @@ http {
                 proxy_pass_request_body off;
                 proxy_set_header Content-Length "";
                 proxy_set_header X-Original-URI $request_uri;
+                proxy_set_header Accept application/json;
         }
 
         define(`expire', `ifelse(COOKIE, `permanent', `; Expires=Fri, 01-Jan-2038 00:00:01 GMT;')')
@@ -77,7 +105,15 @@ http {
         }
 
         location = /logout {
-                proxy_pass http://AUTH_SERVICE/logout/$cookie_token;
+                set $token $cookie_token;
+                if ($token = '') {
+                  set $token $http_x_token;
+                }
+                if ($token = '') {
+                  return 403;
+                }
+
+                proxy_pass http://AUTH_SERVICE/logout/$token;
                 proxy_set_header X-Original-URI $request_uri;
                 add_header Set-Cookie "token=deleted; Path=/; Expires=Thu, 01-Jan-1970 00:00:01 GMT";
 
@@ -165,6 +201,14 @@ http {
                 add_header Set-Cookie "token=$upstream_http_x_token; Path=/EXPIRE";
         }
 
+        location = /create-account {
+               ifdef(`NORATELIMIT', `', `
+                limit_req zone=login burst=3 nodelay;')
+                proxy_pass http://AUTH_SERVICE/create-account/;
+                proxy_set_header X-Original-URI $request_uri;
+        }
+
+
         # Locations to redirect /auth.html
         location = /authentication/index.html {
             # Serve auth.html instead of a 404 page when auth fails
@@ -197,7 +241,6 @@ http {
             expires -1;
             alias /www/authentication/index.html;
         }
-
 
     }
 }

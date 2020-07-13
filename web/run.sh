@@ -11,15 +11,16 @@ else
     exit 1
 fi
 
-PARAM_NORATELIMIT=""
 if [ -n "$NORATELIMIT" ]; then
-  PARAM_NORATELIMIT="-DNORATELIMIT"
+  PARAM_RATELIMIT="-DNORATELIMIT"
+else
+    PARAM_RATELIMIT="-DRATELIMIT"
 fi
 
 
 m4 -DAUTH_SERVICE=auth-service:80 \
    "$PARAM_COOKIE" \
-   "$PARAM_NORATELIMIT" \
+   "$PARAM_RATELIMIT" \
    /nginx.conf.m4 \
    > /etc/nginx/nginx.conf
 

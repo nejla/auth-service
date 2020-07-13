@@ -159,6 +159,11 @@ Users can be added by running the `adduser` command in the `auth-service` contai
 docker exec -it app_auth_1 auth-service adduser "My Name" my_password my_email@example.com
 ```
 
+Users may create their own accounts using the `/api/create-account` endpoint if
+the `ACCOUNT_CREATION` environment variable is set to true. The instance of
+accounts created like this is determined by the `DEFAULT_INSTANCE` variable
+
+
 ## Changing user passwords
 
 Login passwords can be changed by calling `/api/change-password` :
@@ -168,6 +173,23 @@ POST /api/change-password
   {"oldPasword":"myOldPassword","newPassword":"myNewPassword"}"
 
 ```
+
+## Setting user roles
+
+Users can have roles set. The roles will be passed to the backend container in
+the `X-Roles` header
+
+You can modify a users roles by using the `addrole` and `removerole` commands:
+
+```
+docker exec -it app_auth_1 auth-service addrole "my_email@example.com" myrole
+```
+
+```
+docker exec -it app_auth_1 auth-service rmrole "my_email@example.com" myrole
+
+```
+
 
 Other changes can be done with SQL directly.
 
