@@ -1,7 +1,7 @@
-{-# LANGUAGE LambdaCase #-}
--- Copyright (c) 2015 Lambdatrade AB
+-- Copyright (c) 2015-2018 Lambdatrade AB
 -- All rights reserved
 
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -18,7 +18,6 @@ import qualified Control.Monad.Catch  as Ex
 import           Control.Monad.Except
 import qualified Crypto.BCrypt        as BCrypt
 import           Data.Maybe           (listToMaybe)
-import           Data.Monoid
 import           Data.Text            (Text)
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as Text
@@ -78,7 +77,28 @@ createUser usr = do
            DB.UserInstance { DB.userInstanceUser = uid
                            , DB.userInstanceInstanceId = iid
                            }
+       _ <- runDB. P.insertMany $ for (usr ^. roles) $ \role ->
+           DB.UserRole{ DB.userRoleUser = uid
+                      , DB.userRoleRole = role
+                      }
        return $ Just uid
+
+userAddRole :: UserID -> Text -> API ()
+userAddRole usr role = do
+  _ <- runDB $ P.insert DB.UserRole { DB.userRoleUser = usr
+                                    , DB.userRoleRole = role
+                                    }
+  return ()
+
+userRemoveRole :: UserID -> Text -> API ()
+userRemoveRole usr role = do
+  count <- runDB . E.deleteCount . E.from $ \(uRole :: SV DB.UserRole) -> do
+    whereL [ uRole E.^. DB.UserRoleUser ==. val usr
+           , uRole E.^. DB.UserRoleRole ==. val role
+           ]
+  case count of
+    0 -> notFound "User Role" (usr, role)
+    _ -> return ()
 
 getUserByEmail :: Email -> API (Maybe DB.User)
 getUserByEmail name' =
@@ -109,7 +129,7 @@ resetTokenActive now token =
        ]
 
 
-getUserByResetPwToken :: PwResetToken -> API DB.User
+getUserByResetPwToken :: PwResetToken -> API (Maybe DB.User)
 getUserByResetPwToken token = do
   now <- liftIO getCurrentTime
   users <- db' . E.select . E.from $ \((tok :: SV DB.PasswordResetToken)
@@ -123,8 +143,8 @@ getUserByResetPwToken token = do
   case users of
     [] -> do
       Log.logInfo $ "Failed reset password attempt: " <> token
-      Ex.throwM ChangePasswordTokenError
-    (user : _) -> return $ entityVal user
+      return Nothing
+    (user : _) -> return . Just $ entityVal user
 
 
 -- | Reset password using the token from a password reset email
@@ -134,7 +154,10 @@ resetPassword :: PwResetToken
               -> API (Either ChangePasswordError ())
 resetPassword token password mbOtp = runExceptT $ do
   now <- liftIO getCurrentTime
-  usr <- lift $ getUserByResetPwToken token
+  mbUser <- lift $ getUserByResetPwToken token
+  usr <- case mbUser of
+    Nothing -> throwError ChangePasswordTokenError
+    Just usr -> return usr
   let uid = DB.userUuid usr
   lift (handleOTP usr mbOtp) >>= \case
     Left e -> throwError $ ChangePasswordLoginError e
@@ -171,7 +194,7 @@ changeUserPassword user' password' = do
     else Ex.throwM ChangePasswordUserDoesNotExistError
 
 --------------------------------------------------------------------------------
--- Instances -------------------------------------------------------------------
+-- Instances
 --------------------------------------------------------------------------------
 
 
@@ -403,7 +426,7 @@ changePassword tok ChangePassword { changePasswordOldPasword = oldPwd
   (_tokenID, usr) <- case mbUser of
     Nothing -> do
 
-      Log.logInfo $ "Failure while trying to change passowrd " <> (unB64Token tok)
+      Log.logInfo $ "Failure while trying to change password " <> (unB64Token tok)
       throwError ChangePasswordTokenError
     Just usr -> return usr
   mbError <- lift $ checkUserPassword (DB.userEmail usr) oldPwd
@@ -441,19 +464,28 @@ getUserByToken tokenId = do
                         [DB.TokenLastUse P.=. Just now]
   return . fmap (unTokenKey . unValue *** entityVal) $ listToMaybe user'
 
+getUserRoles :: UserID -> API [Text]
+getUserRoles uid =
+  fmap (unValue <$>) . runDB . select . E.from $ \(uRole :: SV DB.UserRole) -> do
+    whereL [ uRole E.^. DB.UserRoleUser ==. val uid]
+    orderBy [asc $ uRole E.^. DB.UserRoleRole]
+    return (uRole E.^. DB.UserRoleRole)
+
 getUserInfo :: B64Token -> API (Maybe ReturnUserInfo)
 getUserInfo token' = do
   mbUser <- getUserByToken token'
   Traversable.forM mbUser $ \(_tid, user') -> do
     instances' <- getUserInstances (user' ^. DB.uuid)
+    roles <- getUserRoles (user' ^. DB.uuid)
     return ReturnUserInfo { returnUserInfoId = user' ^. DB.uuid
                           , returnUserInfoEmail = user' ^. email
                           , returnUserInfoName = user' ^. name
                           , returnUserInfoPhone = user' ^. phone
                           , returnUserInfoInstances = instances'
+                          , returnUserInfoRoles = roles
                           }
 
-checkTokenInstance :: Text -> B64Token -> InstanceID -> API (Maybe UserID)
+checkTokenInstance :: Text -> B64Token -> InstanceID -> API (Maybe (UserID, Email, Name))
 checkTokenInstance request (B64Token "") inst = do
     Log.logES Log.RequestNoToken{ Log.request = request
                                 , Log.instanceId = inst
@@ -478,7 +510,10 @@ checkTokenInstance request tok inst = do
                                                 , Log.instanceId = inst
                                                 }
             return Nothing
-          Just _ -> return $ Just (DB.userUuid usr)
+          Just _ -> return $ Just ( DB.userUuid usr
+                                  , DB.userEmail usr
+                                  , DB.userName usr
+                                  )
 
 checkToken :: B64Token -> API (Maybe UserID)
 checkToken tokenId = fmap (DB.userUuid . snd) <$> getUserByToken tokenId

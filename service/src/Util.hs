@@ -23,17 +23,8 @@ deriving instance TH.Lift Mustache.Template
 htmlTemplate :: String -> TH.Q TH.Exp
 htmlTemplate name = do
   let templatePath = "src/html/" <> name
-      cssPaths =
-        [ "src/html/mui-email-inline.min.css"
-        , "src/html/mui-email-styletag.min.css"
-        ]
   TH.addDependentFile templatePath
-  templateStrRaw <- TH.runIO $ LText.readFile templatePath
-  styleContent <-
-    TH.runIO $ LText.intercalate "\n" <$> mapM LText.readFile cssPaths
-  let styleString = LText.unlines ["<style>", styleContent, "</style>"]
-      templateStr =
-        LText.replace "<style-placeholder/>" styleString templateStrRaw
+  templateStr <- TH.runIO $ LText.readFile templatePath
   case Mustache.compileMustacheText "password reset email" templateStr of
     Left e -> error (show e)
     Right template -> TH.lift template

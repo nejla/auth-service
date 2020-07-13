@@ -53,7 +53,7 @@ renderEmail cfg tmpl mbToken =
   let emailData =
         EmailData
         { emailDataSiteName = cfg ^. siteName
-        , emailDataExpirationTime =  cfg ^.resetLinkExpirationTime
+        , emailDataExpirationTime =  Text.pack $ show $ cfg ^.resetLinkExpirationTime
         , emailDataLink = maybe "" (cfg ^. mkLink) mbToken
         }
       (warnings, result) = Mustache.renderMustacheW tmpl $ fromEmailData emailData
@@ -64,8 +64,6 @@ renderEmail cfg tmpl mbToken =
            "Could not render email, Microstache warnings: " <>
            Text.pack (show warnings)
          Ex.throwM  EmailRenderError
-  where
-    (.=) = (Aeson..=)
 
 sendEmail ::
      EmailConfig
@@ -93,7 +91,6 @@ sendEmail cfg tmpl (Email toAddress) subject token = do
     Left (Ex.ErrorCall msg) -> do
       logError $ "Error sending password reset mail: " <> Text.pack msg
       return False
-    Left e -> Ex.throwM e
     Right () -> return True
 
 sendPasswordResetEmail :: EmailConfig -> Email -> PwResetToken -> API Bool
@@ -111,10 +108,11 @@ passwordResetRequest userMail =
   viewState (config . email) >>= \case
     Nothing -> Ex.throwM EmailErrorNotConfigured
     Just cfg -> do
+      let expirationHours = cfg ^. resetLinkExpirationTime
       mbUser <- getUserByEmail userMail
       mbToken <-
         Traversable.forM mbUser $ \uid ->
-          createResetToken (hours 24) (uid ^. uuid)
+          createResetToken (hours expirationHours) (uid ^. uuid)
       case mbToken of
         Nothing -> sendPasswordResetUnknownEmail cfg userMail
         Just tok -> sendPasswordResetEmail cfg userMail tok

@@ -1,17 +1,16 @@
-resolver: lts-10.3
+resolver: lts-14.11
 
-packages:
-  - location: '.'
-  - location: '../auth-service-types'
-    extra-dep: true
-  - location:
-      git: git@git.nejla.com:nejla-ab/common.git
-      commit: 2fc66571821282993095a13dd2d97329c0a68ac0
-    extra-dep: true
+extra-deps:
+  - git: git@git.nejla.com:nejla-ab/common.git
+    commit: 65adf85e5e25274f31564e8efa2a48f581633734
+  - '../auth-service-types'
 
-image:
-  container:
-    name: "auth-service"
-    base: "auth-service-baseimage"
-    add:
-      docker/add: /app
+
+docker:
+  enable: false
+  image: nejla/haskell-build
+
+nix:
+  packages:
+    - zlib
+    - postgresql

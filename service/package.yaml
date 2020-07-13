@@ -48,6 +48,7 @@ library:
   - monad-logger >=0.3
   - mtl >=2.2
   - nejla-common
+  - network
   - path-pieces
   - persistent >=2.2
   - persistent-postgresql >=2.2
@@ -128,3 +129,4 @@ tests:
     - tasty-th
     - text
     - time
+    - uuid

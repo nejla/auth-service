@@ -1,0 +1,32 @@
+{
+  "name": "sign-in-page",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --env.NODE_ENV=production --mode production",
+    "start": "webpack-dev-server --env.NODE_ENV=development --mode development"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://git.nejla.com/nejla-ab/auth-service.git"
+  },
+  "author": "Jon Kristensen",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "vue": "^2.5.17",
+    "vue-focus": "^2.1.0"
+  },
+  "devDependencies": {
+    "babel-core": "^6.26.3",
+    "babel-loader": "^7.1.5",
+    "babel-preset-env": "^1.7.0",
+    "eslint": "^5.3.0",
+    "eslint-loader": "^2.1.0",
+    "file-loader": "^1.1.11",
+    "html-webpack-plugin": "^3.2.0",
+    "webpack": "^4.16.5",
+    "webpack-cli": "^3.1.0",
+    "webpack-dev-server": "^3.1.5"
+  }
+}

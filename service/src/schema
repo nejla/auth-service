@@ -8,6 +8,13 @@ User
   phone Phone Maybe
   deriving Show
 
+UserRole
+  user UserID
+  Foreign User fkUser user
+  role Text
+  Primary user role
+  UniqueUserRole user role
+
 Instance
   uuid InstanceID
   Primary uuid

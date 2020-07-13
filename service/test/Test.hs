@@ -49,7 +49,7 @@ assertFailure :: Ex.MonadThrow m => String -> m a
 assertFailure = Ex.throwM  . AssertionFailed
 
 --------------------------------------------------------------------------------
--- Add User --------------------------------------------------------------------
+-- Add User
 --------------------------------------------------------------------------------
 
 testUser :: AddUser
@@ -59,6 +59,7 @@ testUser = AddUser { addUserUuid = Nothing
                    , addUserName = "Jon Doe"
                    , addUserPhone = Nothing
                    , addUserInstances = []
+                   , addUserRoles = []
                    }
 
 testUserOtp :: AddUser
@@ -137,7 +138,7 @@ case_user_check_password_wrong = withUser testUser $ \_uid run -> do
     Right _ -> assertFailure "Accepted bogus password"
 
 --------------------------------------------------------------------------------
--- Password Changes ------------------------------------------------------------
+-- Password Changes
 --------------------------------------------------------------------------------
 
 case_user_change_password :: IO ()
@@ -185,7 +186,7 @@ case_changePassword_otp =
     return ()
 
 --------------------------------------------------------------------------------
--- Reset Password --------------------------------------------------------------
+-- Reset Password
 --------------------------------------------------------------------------------
 
 case_reset_password :: IO ()
@@ -198,8 +199,8 @@ case_reset_password = withUser testUser $ \uid run -> do
 case_reset_password_wrong_token :: IO ()
 case_reset_password_wrong_token =
   withRunAPI Nothing $ \run -> do
-    run (resetPassword "BogusToken" "newPwd" Nothing) `shouldThrow`
-      (== ChangePasswordTokenError)
+    run (resetPassword "BogusToken" "newPwd" Nothing) `shouldReturn`
+      (Left ChangePasswordTokenError)
     return ()
 
 case_reset_password_OTP :: IO ()
@@ -216,16 +217,16 @@ case_reset_password_double_use =
   withUser testUser $ \uid run -> do
     tok <- run $ createResetToken 60 uid
     run $ resetPassword tok "newPwd" Nothing
-    run (resetPassword tok "newPwd2" Nothing) `shouldThrow`
-      (== ChangePasswordTokenError)
+    run (resetPassword tok "newPwd2" Nothing) `shouldReturn`
+      (Left ChangePasswordTokenError)
     return ()
 
 case_reset_password_expired :: IO ()
 case_reset_password_expired =
   withUser testUser $ \uid run -> do
     tok <- run $ createResetToken (-60) uid
-    run (resetPassword tok "newPwd" Nothing) `shouldThrow`
-      (== ChangePasswordTokenError)
+    run (resetPassword tok "newPwd" Nothing) `shouldReturn`
+      (Left ChangePasswordTokenError)
     return ()
 
 testEmailData :: EmailData
@@ -275,7 +276,7 @@ case_password_reset_default_template = do
   return ()
 
 --------------------------------------------------------------------------------
--- Instances -------------------------------------------------------------------
+-- Instances
 --------------------------------------------------------------------------------
 
 case_add_user_instance :: IO ()
@@ -295,7 +296,7 @@ case_remove_user_instance = withUser testUser $ \uid run -> do
   iids `shouldBe` []
 
 --------------------------------------------------------------------------------
--- MkRandomString --------------------------------------------------------------
+-- MkRandomString
 --------------------------------------------------------------------------------
 
 prop_mkRandomString_length :: Int -> Property
@@ -312,7 +313,7 @@ prop_mkRandomString_chars len numChars = QC.monadicIO $ do
   QC.assert (Text.all (`elem` chars) str)
 
 --------------------------------------------------------------------------------
--- Login -----------------------------------------------------------------------
+-- Login
 --------------------------------------------------------------------------------
 
 runLogin :: (forall a . API a -> IO a)
@@ -400,7 +401,7 @@ case_checkTokenInstance = withUserToken testUser $ \tok uid run -> do
   iid <- run $ addInstance Nothing "testInstance"
   run $ addUserInstance uid iid
   res <- run $ checkTokenInstance "" tok iid
-  res `shouldBe` Just uid
+  res `shouldBe` Just (uid, addUserEmail testUser, addUserName testUser)
 
 case_checkTokenInstance_not_member :: IO ()
 case_checkTokenInstance_not_member = withUserToken testUser $ \tok _uid run -> do

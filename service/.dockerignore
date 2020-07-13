@@ -1,5 +1,4 @@
 Dockerfile
-**/dist
 docker-compose.yml
 web
 tests
@@ -9,3 +8,4 @@ tests
 .dockerignore
 .stack-work
 **/.stack-work
+src

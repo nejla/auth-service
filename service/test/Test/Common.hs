@@ -4,9 +4,12 @@
 module Test.Common where
 
 import           Control.Monad.Logger
+import           Data.Maybe              (fromJust)
 import           Data.Monoid
 import           Data.Pool
 import           Data.Time.Clock
+import           Data.UUID               (UUID)
+import qualified Data.UUID               as UUID
 import           Database.Persist.Sqlite as SQLite
 import           Test.Hspec.Wai
 import qualified Text.Microstache        as Mustache
@@ -35,7 +38,7 @@ testEmailConfig =
       , sendmailConfigArguments = []
       }
   , emailConfigSiteName = "Test Site"
-  , emailConfigResetLinkExpirationTime = "24 hours"
+  , emailConfigResetLinkExpirationTime = 24
   , emailConfigMkLink = \tok -> "http://localhost/reset?token=" <> tok
   }
   where
@@ -49,19 +52,31 @@ testEmailConfig =
         "Your email is unknown"
 
 
+accountCreationConfig = AccountCreationConfig
+  { accountCreationConfigEnabled = True
+  , accountCreationConfigDefaultInstances =
+              [ InstanceID . fromJust $
+                UUID.fromText "de305d54-75b4-431b-adb2-eb6b9e546014"
+              ]
+  }
+
 withApiData :: Maybe OtpHandler -> (Pool SqlBackend -> Config -> IO a) -> IO a
-withApiData mbHandleOtp f = withMemoryPool $ \pool -> do
-  let conf = Config { configTimeout           = 9999
-                    , configOTPLength         = 6
-                    , configOTPTimeoutSeconds = 10
-                    , configTFARequired       = True
-                    , configOtp               = mbHandleOtp
-                    , configUseTransactionLevels = False
-                    , configEmail = Just testEmailConfig
-                    }
-  liftIO $ do
-    _ <- runSqlPool (runMigrationSilent DB.migrateAll) pool
-    f pool conf
+withApiData mbHandleOtp f =
+  withMemoryPool $ \pool -> do
+    let conf =
+          Config
+          { configTimeout = 9999
+          , configOTPLength = 6
+          , configOTPTimeoutSeconds = 10
+          , configTFARequired = True
+          , configOtp = mbHandleOtp
+          , configUseTransactionLevels = False
+          , configEmail = Just testEmailConfig
+          , configAccountCreation = accountCreationConfig
+          }
+    liftIO $ do
+      _ <- runSqlPool (runMigrationSilent DB.migrateAll) pool
+      f pool conf
 
 withRunAPI :: Maybe OtpHandler -> ((forall a. API a -> IO a) -> IO b) -> IO b
 withRunAPI mbOtpHandler f = withApiData mbOtpHandler

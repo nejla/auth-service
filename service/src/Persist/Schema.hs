@@ -43,4 +43,4 @@ makeLensesWith camelCaseFields ''UserInstance
 makeLensesWith camelCaseFields ''Token
 
 instance ForeignKey PasswordResetToken User where
-  foreignPair = ForeignPair PasswordResetTokenUser UserUuid
+  foreignPairs = [ForeignPair PasswordResetTokenUser UserUuid]

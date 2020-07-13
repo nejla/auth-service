@@ -30,7 +30,10 @@ type CheckTokenAPI = "check-token"
                   :> Capture "token" B64Token
                   :> Capture "instance" InstanceID
                   :> Header "X-Original-URI" Text
-                  :> Get '[JSON] (Headers '[Header "X-User" UserID] ReturnUser)
+                  :> Get '[JSON] (Headers '[ Header "X-User-ID" UserID
+                                           , Header "X-User-Email" Email
+                                           , Header "X-Roles" Roles
+                                           ] ReturnUser)
 
 type PublicCheckTokenAPI = "check-token"
                         :> Capture "token" B64Token
@@ -57,8 +60,13 @@ type PasswordResetInfoAPI =  "reset-password-info"
                              :> Get '[JSON] ResetTokenInfo
 
 
+type CreateAccountAPI = "create-account"
+                      :> Header "X-Instance" InstanceID
+                      :> ReqBody '[JSON] CreateAccount
+                      :> PostCreated '[JSON] NoContent
+
 --------------------------------------------------------------------------------
--- Admin Interface -------------------------------------------------------------
+-- Admin Interface
 --------------------------------------------------------------------------------
 
 type CreateUserAPI = "users" :> ReqBody '[JSON] AddUser :> Post '[JSON] ReturnUser
@@ -66,7 +74,7 @@ type CreateUserAPI = "users" :> ReqBody '[JSON] AddUser :> Post '[JSON] ReturnUs
 type AdminAPI = "admin" :> CreateUserAPI
 
 --------------------------------------------------------------------------------
--- Interface -------------------------------------------------------------------
+-- Interface
 --------------------------------------------------------------------------------
 
 type Api = LoginAPI
@@ -81,3 +89,4 @@ type Api = LoginAPI
            :<|> RequestPasswordResetAPI
            :<|> PasswordResetAPI
            :<|> PasswordResetInfoAPI
+           :<|> CreateAccountAPI

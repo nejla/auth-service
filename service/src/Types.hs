@@ -34,7 +34,7 @@ import qualified Text.Microstache     as Mustache
 import           AuthService.Types
 
 --------------------------------------------------------------------------------
--- Error -----------------------------------------------------------------------
+-- Error
 --------------------------------------------------------------------------------
 
 data EmailError = EmailErrorNotConfigured
@@ -63,7 +63,7 @@ instance Ex.Exception ChangePasswordError
 makePrisms ''ChangePasswordError
 
 --------------------------------------------------------------------------------
--- Config ----------------------------------------------------------------------
+-- Config
 --------------------------------------------------------------------------------
 type PwResetToken = Text
 
@@ -97,11 +97,17 @@ data EmailConfig = EmailConfig
   , emailConfigPWResetUnknownTemplate :: Mustache.Template
   , emailConfigSendmail :: SendmailConfig
   , emailConfigSiteName :: Text
-  , emailConfigResetLinkExpirationTime :: Text
+  , emailConfigResetLinkExpirationTime :: Int -- ^ Time in hours
   , emailConfigMkLink :: PwResetToken -> Text -- ^ Generate a link from a token
   }
 
 type OtpHandler = Phone -> Text -> API ()
+
+data AccountCreationConfig =
+  AccountCreationConfig
+  { accountCreationConfigEnabled :: Bool
+  , accountCreationConfigDefaultInstances :: [InstanceID]
+  }
 
 data Config = Config
   { configTimeout              :: Integer -- token timeout in seconds
@@ -111,6 +117,8 @@ data Config = Config
   , configOtp                  :: Maybe OtpHandler
   , configUseTransactionLevels :: Bool
   , configEmail                :: Maybe EmailConfig
+
+  , configAccountCreation      :: AccountCreationConfig
   }
 
 -- | Necessary data to fill in a password reset email
@@ -122,7 +130,7 @@ data EmailData =
   } deriving (Show)
 
 --------------------------------------------------------------------------------
--- Monad -----------------------------------------------------------------------
+-- Monad
 --------------------------------------------------------------------------------
 
 newtype ApiState = ApiState { apiStateConfig :: Config
@@ -139,6 +147,7 @@ runDB = NC.db'
 
 makeLensesWith camelCaseFields ''ApiState
 makeLensesWith camelCaseFields ''EmailData
+makeLensesWith camelCaseFields ''AccountCreationConfig
 makeLensesWith camelCaseFields ''Config
 makeLensesWith camelCaseFields ''EmailConfig
 makeLensesWith camelCaseFields ''SendmailConfig

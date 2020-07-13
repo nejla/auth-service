@@ -14,8 +14,8 @@ import           Backend
 import           Control.Lens
 import qualified Control.Monad.Catch  as Ex
 import           Control.Monad.Except
-import           Data.Maybe           (fromMaybe)
-import           Data.Monoid
+import qualified Data.List            as List
+import           Data.Maybe           (fromMaybe, maybeToList)
 import           Database.Persist.Sql
 import           Network.Wai
 import           Servant
@@ -30,6 +30,12 @@ import           AuthService.Api
 liftHandler :: IO a -> Handler a
 liftHandler = Handler . lift
 
+type StatusApi = "status" :> GetNoContent '[JSON] NoContent
+
+serveStatus :: Server StatusApi
+serveStatus = return NoContent
+
+
 -- Will be transformed into X-Token header and token cookie by the nginx
 serveLogin :: ConnectionPool -> Config -> Server LoginAPI
 serveLogin pool conf loginReq = loginHandler
@@ -39,12 +45,12 @@ serveLogin pool conf loginReq = loginHandler
         case mbReturnLogin of
          Right rl -> return (addHeader (returnLoginToken rl) rl)
          Left LoginErrorOTPRequired ->
-             throwError ServantErr{ errHTTPCode = 499
-                                  , errReasonPhrase = "OTP required"
-                                  , errBody =
-                                    "{\"error\":\"One time password required\"}"
-                                  , errHeaders = []
-                                  }
+             throwError ServerError{ errHTTPCode = 499
+                                   , errReasonPhrase = "OTP required"
+                                   , errBody =
+                                     "{\"error\":\"One time password required\"}"
+                                   , errHeaders = []
+                                   }
          Left _e -> throwError err403
 
 
@@ -76,13 +82,24 @@ serveCheckToken :: ConnectionPool -> Config -> Server CheckTokenAPI
 serveCheckToken pool conf tok inst req = checkTokenHandler
   where
     checkTokenHandler = do
-        res <- liftHandler . runAPI pool conf $ do
-            logDebug $ "Checking token " <> showText tok
-                       <> " for instance " <> showText inst
-            checkTokenInstance (fromMaybe "" req) tok inst
-        case res of
-         Nothing -> throwError err403
-         Just usr -> return . addHeader usr $ ReturnUser usr
+      res <-
+        liftHandler . runAPI pool conf $ do
+          logDebug $
+            "Checking token " <> showText tok <> " for instance " <>
+            showText inst
+          mbUser <- checkTokenInstance (fromMaybe "" req) tok inst
+          forM mbUser $ \(usrId, usrEmail, _userName) -> do
+            roles' <- getUserRoles usrId
+            return (usrId, usrEmail, roles')
+      case res of
+        Nothing -> throwError err403
+        Just (usr, userEmail, roles') -> do
+          return . addHeader usr
+                 . addHeader userEmail
+                 . addHeader (Roles roles')
+                 $ ReturnUser { returnUserUser = usr
+                              , returnUserRoles = roles'
+                              }
 
 servePublicCheckToken :: ConnectionPool -> Config -> Server PublicCheckTokenAPI
 servePublicCheckToken pool conf tok = checkTokenHandler
@@ -112,7 +129,7 @@ serveGetUserInfoAPI pool conf tok =  do
    Just rui -> return rui
 
 --------------------------------------------------------------------------------
--- Admin interface -------------------------------------------------------------
+-- Admin interface
 --------------------------------------------------------------------------------
 
 serveCreateUserAPI :: ConnectionPool -> Config -> Server CreateUserAPI
@@ -120,7 +137,9 @@ serveCreateUserAPI pool conf addUser = do
   res <- liftHandler . runAPI pool conf $ createUser addUser
   case res of
     Nothing -> throwError err500
-    Just uid -> return $ ReturnUser uid
+    Just uid -> return $ ReturnUser{ returnUserUser = uid
+                                   , returnUserRoles = addUser ^. roles
+                                   }
 
 adminAPIPrx :: Proxy AdminAPI
 adminAPIPrx = Proxy
@@ -131,10 +150,10 @@ serveAdminAPI :: ConnectionPool
 serveAdminAPI = serveCreateUserAPI
 
 --------------------------------------------------------------------------------
--- Interface -------------------------------------------------------------------
+-- Interface
 --------------------------------------------------------------------------------
 
-apiPrx :: Proxy Api
+apiPrx :: Proxy (StatusApi :<|> Api)
 apiPrx = Proxy
 
 serveRequestPasswordResetAPI ::
@@ -144,7 +163,7 @@ serveRequestPasswordResetAPI pool conf req = do
     Nothing -> do
       liftHandler . runAPI pool conf $ logError $ "Password reset: email not configured"
       throwError $ err404
-    Just emailCfg -> do
+    Just _emailCfg -> do
       res <- Ex.try . liftHandler . runAPI pool conf $
                passwordResetRequest (req ^. email)
       case res of
@@ -165,21 +184,41 @@ servePasswordResetAPI pool conf pwReset = do
     Left _ -> throwError err403
     Right () -> return NoContent
 
-servePasswordResetTokenInfo :: ConnectionPool -> Config -> Server PasswordResetInfoAPI
-servePasswordResetTokenInfo pool conf Nothing = throwError err400
+servePasswordResetTokenInfo ::
+     ConnectionPool -> Config -> Server PasswordResetInfoAPI
+servePasswordResetTokenInfo _pool _conf Nothing = throwError err400
 servePasswordResetTokenInfo pool conf (Just token) = do
   mbInfo <-
     Ex.try . liftHandler . runAPI pool conf $ getUserByResetPwToken token
   case mbInfo of
-    Right r -> return $ ResetTokenInfo (DB.userEmail r)
+    Right (Just r) -> return $ ResetTokenInfo (DB.userEmail r)
     Left ChangePasswordTokenError -> do
       liftHandler . runAPI pool conf $ logInfo $ "Tried to request token info with invalid Token " <> token
       throwError err403
-    Left _ -> throwError err403
+    _ -> throwError err403
 
+serveCreateAccountApi :: ConnectionPool -> Config -> Server CreateAccountAPI
+serveCreateAccountApi pool conf xinstance createAccount =
+  case (accountCreationConfigEnabled $ configAccountCreation conf) of
+    False -> throwError err403
+    True -> liftHandler . runAPI pool conf $ do
+      dis <- getConfig (accountCreation . defaultInstances)
+      _ <-
+        createUser
+          AddUser
+          { addUserUuid = Nothing
+          , addUserEmail = createAccountEmail createAccount
+          , addUserPassword = createAccountPassword createAccount
+          , addUserName = createAccountName createAccount
+          , addUserPhone = createAccountPhone createAccount
+          , addUserInstances = (List.nub $ maybeToList xinstance ++ dis)
+          , addUserRoles = []
+          }
+      return NoContent
 
 serveAPI :: ConnectionPool -> Config -> Application
-serveAPI pool conf = serve apiPrx $ serveLogin pool conf
+serveAPI pool conf = serve apiPrx $ serveStatus
+                               :<|> serveLogin pool conf
                                :<|> serveCheckToken pool conf
                                :<|> servePublicCheckToken pool conf
                                :<|> serveLogout pool conf
@@ -191,3 +230,4 @@ serveAPI pool conf = serve apiPrx $ serveLogin pool conf
                                :<|> serveRequestPasswordResetAPI pool conf
                                :<|> servePasswordResetAPI pool conf
                                :<|> servePasswordResetTokenInfo pool conf
+                               :<|> serveCreateAccountApi pool conf

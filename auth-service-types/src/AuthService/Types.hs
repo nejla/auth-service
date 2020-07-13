@@ -15,8 +15,8 @@ module AuthService.Types where
 
 import           Control.Lens
 import           Data.Aeson
-import           Data.Aeson.Types
 import           Data.Aeson.TH
+import           Data.Aeson.Types
 import           Data.ByteString            (ByteString)
 import           Data.ByteString.Conversion
 import           Data.Data
@@ -148,8 +148,10 @@ makePrisms ''B64Token
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "unB64"} ''B64Token
 
 --------------------------------------------------------------------------------
--- User ------------------------------------------------------------------------
+-- User
 --------------------------------------------------------------------------------
+
+type Role = Text
 
 data AddUser = AddUser { addUserUuid      :: Maybe UserID
                        , addUserEmail     :: Email
@@ -157,12 +159,31 @@ data AddUser = AddUser { addUserUuid      :: Maybe UserID
                        , addUserName      :: Name
                        , addUserPhone     :: Maybe Phone
                        , addUserInstances :: [InstanceID]
+                       , addUserRoles     :: [Text]
                        } deriving (Show)
 
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "addUser"} ''AddUser
 makeLensesWith camelCaseFields ''AddUser
 
-data ReturnUser = ReturnUser { returnUserUser :: UserID }
+newtype Roles = Roles
+  { unRoles :: [Role]
+  } deriving (Show)
+
+instance ToHttpApiData Roles where
+  toUrlPiece (Roles roles)= Text.intercalate "," roles
+
+instance FromHttpApiData Roles where
+  parseUrlPiece txt =
+    let roles = Text.split (== ',') txt
+    in case roles of
+         [""] -> Right $ Roles []
+         _ -> case any Text.null roles of
+                True -> Left "Empty roles"
+                False -> Right $ Roles roles
+
+data ReturnUser = ReturnUser { returnUserUser :: UserID
+                             , returnUserRoles :: [Role]
+                             }
                     deriving (Show, Eq)
 
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "returnUser"}
@@ -184,6 +205,7 @@ data ReturnUserInfo = ReturnUserInfo { returnUserInfoId :: UserID
                                      , returnUserInfoName :: Name
                                      , returnUserInfoPhone :: Maybe Phone
                                      , returnUserInfoInstances :: [ReturnInstance]
+                                     , returnUserInfoRoles :: [Text]
                                      }
 
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "returnUserInfo"}
@@ -219,7 +241,7 @@ deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "changePassword"}
 makeLensesWith camelCaseFields ''ChangePassword
 
 --------------------------------------------------------------------------------
--- Password Reset --------------------------------------------------------------
+-- Password Reset
 --------------------------------------------------------------------------------
 
 data PasswordResetRequest =
@@ -257,3 +279,21 @@ makeLensesWith camelCaseFields ''PasswordReset
 deriveJSON
   defaultOptions {fieldLabelModifier = dropPrefix "passwordReset"}
   ''PasswordReset
+
+--------------------------------------------------------------------------------
+-- Account Creation
+--------------------------------------------------------------------------------
+
+data CreateAccount =
+  CreateAccount
+  { createAccountEmail :: Email
+  , createAccountPassword :: Password
+  , createAccountName :: Name
+  , createAccountPhone :: Maybe Phone
+  } deriving (Show)
+
+makeLensesWith camelCaseFields ''CreateAccount
+
+deriveJSON
+  defaultOptions {fieldLabelModifier = dropPrefix "createAccount"}
+  ''CreateAccount

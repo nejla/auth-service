@@ -43,12 +43,14 @@ adminApiSpec = do
                                    , "email" : "no@spam.please"
                                    , "password" : "pwd"
                                    , "instances" : [#{iid}]
+                                   , "roles": []
                                    } |] `shouldRespondWith` 200
       it "allows the user to login" $ do
         postJ "/admin/users" [json|{ "name": "robert"
                                    , "email" : "no@spam.please"
                                    , "password" : "pwd"
                                    , "instances" : [#{iid}]
+                                   , "roles": []
                                    } |] `shouldRespondWith` 200
         -- Check if new user can login
         postJ "/login" [json| { "user": "no@spam.please"
