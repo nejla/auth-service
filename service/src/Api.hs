@@ -88,14 +88,15 @@ serveCheckToken pool conf tok inst req = checkTokenHandler
             "Checking token " <> showText tok <> " for instance " <>
             showText inst
           mbUser <- checkTokenInstance (fromMaybe "" req) tok inst
-          forM mbUser $ \(usrId, usrEmail, _userName) -> do
+          forM mbUser $ \(usrId, usrEmail, userName) -> do
             roles' <- getUserRoles usrId
-            return (usrId, usrEmail, roles')
+            return (usrId, usrEmail, userName, roles')
       case res of
         Nothing -> throwError err403
-        Just (usr, userEmail, roles') -> do
+        Just (usr, userEmail, userName, roles') -> do
           return . addHeader usr
                  . addHeader userEmail
+                 . addHeader userName
                  . addHeader (Roles roles')
                  $ ReturnUser { returnUserUser = usr
                               , returnUserRoles = roles'

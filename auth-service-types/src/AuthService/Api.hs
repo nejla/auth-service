@@ -32,6 +32,7 @@ type CheckTokenAPI = "check-token"
                   :> Header "X-Original-URI" Text
                   :> Get '[JSON] (Headers '[ Header "X-User-ID" UserID
                                            , Header "X-User-Email" Email
+                                           , Header "X-User-Name" Name
                                            , Header "X-Roles" Roles
                                            ] ReturnUser)
 

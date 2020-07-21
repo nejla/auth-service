@@ -1,7 +1,10 @@
 TAG=$(shell git rev-parse HEAD)
 SERVICE_IMAGE=$(REGISTRY)/$(APP_IMAGE_NAME)
 
-image: build Dockerfile
+srcfiles=$(shell find src -type f)
+
+
+image: dist/auth-service Dockerfile
 	docker build -t "registry.nejla.com/nejla-ab/auth-service/auth-service:${TAG}" .
 	docker tag "registry.nejla.com/nejla-ab/auth-service/auth-service:${TAG}" \
 	           "registry.nejla.com/nejla-ab/auth-service/auth-service:latest"
@@ -17,7 +20,7 @@ build: dist/auth-service
 test: dist/auth-service
 	stack test ${stack_build_args} --install-ghc
 
-dist/auth-service: src/* src/**/* package.yaml stack.yaml
+dist/auth-service: $(srcfiles) package.yaml stack.yaml
 	rm -f *.cabal
 	rm -f stack.yaml.lock
 	mkdir -p ./dist
