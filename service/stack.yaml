@@ -1,16 +1,16 @@
-resolver: lts-14.27
+resolver: lts-16.21
 
 extra-deps:
   - git: git@git.nejla.com:nejla-ab/common.git
-    commit: 65adf85e5e25274f31564e8efa2a48f581633734
+    commit: a5fbeb7f3aa4de723dc7cd5f2482178f1dba992c
   - '../auth-service-types'
-
 
 docker:
   enable: false
   image: nejla/haskell-build
 
 nix:
+  # shell-file: stack.nix
   packages:
     - zlib
     - postgresql

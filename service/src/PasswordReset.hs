@@ -30,6 +30,7 @@ import qualified Text.Microstache     as Mustache
 
 import           Backend
 import           Logging
+import           Monad
 import           Types
 
 -- | Create an Aeson object from password reset email data

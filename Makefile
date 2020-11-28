@@ -4,11 +4,10 @@ build-env-file=$(env-file)
 endif
 include $(build-env-file)
 
-TAG=$(shell git rev-parse HEAD)
-SERVICE_IMAGE=$(REGISTRY)/$(APP_IMAGE_NAME)
 WEB_IMAGE=$(REGISTRY)/$(WEB_IMAGE_NAME)
 
-all: service/image auth-web-container
+all: auth-web-container
+	$(MAKE) -C service all
 
 .PHONY: service/image
 service/image:
@@ -31,20 +30,19 @@ auth-web-container:
 	docker tag $(WEB_IMAGE):latest $(WEB_IMAGE):$(TAG)
 
 
-run: all
+run: service/image auth-web-container
 	docker-compose up
 
-up: all
+up: service/image auth-web-container
 	docker-compose up -d
 
 down:
 	docker-compose down --remove-orphans -v
 
 push:
+	$(MAKE) -C service push
 	docker push $(WEB_IMAGE):$(TAG)
 	docker push $(WEB_IMAGE):latest
-	docker push $(SERVICE_IMAGE):$(TAG)
-	docker push $(SERVICE_IMAGE):latest
 
 clean:
 	$(MAKE) -C service clean

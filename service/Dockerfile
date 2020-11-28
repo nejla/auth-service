@@ -1,7 +1,7 @@
 # @IMAGE auth-service-service
 # @VERSION 20200114-01
 
-From ubuntu
+FROM ubuntu:focal as baseimage
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
@@ -20,6 +20,8 @@ ENV LC_ALL=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US.UTF-8
 ENV PATH=/app:$PATH
+
+FROM baseimage
 
 EXPOSE 80
 

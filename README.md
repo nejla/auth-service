@@ -84,6 +84,72 @@ Example:
         - TWILIO_SOURCE=<twilio source phone number>
 ```
 
+## Configuring auth-service
+
+You can configure the auth-service container by setting environment variables,
+e.g. by adding `-E "option=value"` to docker calls or by setting them in your
+docker-compose.yaml files
+
+Available configuration options:
+
+### General Options
+
+* `TOKEN_TIMEOUT` (Int) _optional_: Time before login tokens expire in seconds after the token was created. Only affects newly created tokens. (e.g. 3600 = one hour). Tokens don't expire when unset
+
+### Password Reset Emails
+If `EMAIL_FROM` is set, all options that aren't marked as optional become
+mandatory. If `EMAIL_FROM` is unset, mail is deactivated and all email-related
+options are ignored
+
+* `EMAIL_FROM` (String) _optional_: Address to send emails from
+  (e.g. "myapp@example.com"). If this is unset, email is desabled and all other
+  email-related options are ignored
+* `EMAIL_FROM_NAME` (String) _optional_: Human-visible name to set (e.g. "My Cool App")
+* `EMAIL_STMP` (String): SMTP server to send emails to (e.g. "smtp.emample.com")
+* `EMAIL_PORT` (Int) _optional_: SMTP server port to connect to (default: 25)
+* `EMAIL_USER` (String): SMTP username (e.g. "myapp")
+* `EMAIL_PASSWORD` (String): SMTP password (e.g. "correctbatteryhorsestaple")
+* `SITE_NAME` (String): Displayed name of the website in password reset emails (e.g. "This Cool App" or "thisapp.example.com")
+* `RESET_LINK_EXPIRATION_TIME` (Int) _optional_: Time before password reset links expire, in hours (default: 24)
+* `EMAIL_TEMPLATE` (Path) _optional_: Path to the mustache template for password reset emails (default: builtin template)
+* `EMAIL_UNKNOWN_TEMPLATE` (Path) _optional_: Path to the mustache template for
+  password reset emails when the email address is not in the system (default: builtin template)
+* `EMAIL_LINK_TEMPLATE` (String): Template to generate links from password reset tokens, replacing %s with the token (e.g. "https://my-app.example.com/reset-password?token=%s")
+* `SENDMAIL_PROGRAM` (Path) _optional_: Path of and arguments to the sendmail
+  executable to use, separated by spaces (default: "/usr/sbin/sendmail")
+* `EMAIL_TLS` (Bool) _optional_: Whether to use TLS to connect to the SMTP server (default: true)
+* `EMAIL_AUTH` (Bool) _optional_: Whether to authenticate to the SMTP server (default: true)
+
+* `RESET_LINK_EXPIRATION_TIME` (Int) _optional_: Time before password reset link expires, in hours (default: 24)
+
+
+### Two Factor Authentication
+
+Twilio is a mobile messaging service, used in auth-service for Two-factor authentication
+
+* `TFA_REQUIRED` (Bool) _optional_: Whether TFA is required for all users
+  (default: false). If this is set to true, Twilio account details need to be
+  configures
+* `TWILIO_ACCOUNT` (String) _optional_: The twilio account to use (e.g. 123456)
+* `TWILIO_TOKEN` (String) _optional_: Twilio authentication token
+* `TWILIO_SOURCE` (String) _optional_: The phone number to send messages from
+
+* `OTP_LENGTH` (Int) _optional_: Number of characters to use in one time password (default: 4)
+* `OTP_TIMEOUT` (Int) _optional_: Time before one time password expires, in seconds (default: 300 (five minutes))
+
+Note that of you set _any_ of the twilio options you have to set _all_ of them.
+
+### Account Creation
+
+* `ACCOUNT_CREATION` (Bool) _optional_: Whether new users are allowed to create accounts (default: false)
+* `DEFAULT_INSTACE` (UUID) _optional_: Default instance to set on new accounts (e.g. `6595bcf6-ba54-4054-b09a-f67618a9ba3b`)
+
+## Configuring the auth-web container
+
+You can set the following environment variables:
+
+* `COOKIE` (String) _optional_: If set to `permanent` cookies are permanent, otherwise cookies are sent as session cookies
+
 ## Configuring the frontend proxy container
 
 To facilitate the use of auth-web service, you need to include
@@ -153,16 +219,66 @@ Please see auth-service.config for the configuration options.
 
 ## Creating new users
 
+### Using the CLI tool
 Users can be added by running the `adduser` command in the `auth-service` container:
 
 ```
 docker exec -it app_auth_1 auth-service adduser "My Name" my_password my_email@example.com
 ```
 
-Users may create their own accounts using the `/api/create-account` endpoint if
-the `ACCOUNT_CREATION` environment variable is set to true. The instance of
-accounts created like this is determined by the `DEFAULT_INSTANCE` variable
+### Using the web API
 
+Users with the `Admin` role can create new users via the endpoint `POST
+/api/users` with the following request body:
+
+```json
+{
+  "uuid": "78caafc1-c71b-410a-b338-90dd7b59af0d",
+  "email": "newuser@example.com",
+  "password": "pasword",
+  "name": "User Name",
+  "phone": "123456789",
+  "instances": [
+    "78caafc1-c71b-410a-b338-90dd7b59af0d"
+  ],
+  "roles": [
+    "role1"
+  ]
+}
+```
+
+* `uuid` and `phone` are optional (uuid will be filled in automatically if unset)
+
+Response:
+
+```json
+{
+  "user": "78caafc1-c71b-410a-b338-90dd7b59af0d",
+  "roles": [ "role1" ]
+}
+```
+
+### By users using the self-service API
+
+Users may create their own accounts using the `POST /api/create-account` endpoint if
+the `ACCOUNT_CREATION` environment variable is set to true. The instance of
+accounts created like this is determined by the `DEFAULT_INSTANCE` variable and
+the `X-Instance` header set by the auth_web container.
+
+The request body should look like this:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password",
+  "name": "Robert E. Xampleuser",
+  "phone": "1234567"
+}
+```
+
+* phone is optional
+
+* Nothing is returned
 
 ## Changing user passwords
 

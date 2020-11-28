@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE DeriveLift #-}
@@ -5,15 +6,19 @@
 
 module Util where
 
+import           Data.Map.Strict            (Map)
+import qualified Data.Map.Strict            as Map
 import           Data.Monoid
 import qualified Data.Text.Lazy             as LText
 import qualified Data.Text.Lazy.IO          as LText
-import           Instances.TH.Lift          ()
+import           Language.Haskell.TH
+import qualified Language.Haskell.TH.Quote  as TH
 import qualified Language.Haskell.TH.Syntax as TH
-import qualified Language.Haskell.TH.Quote as TH
 import qualified Text.Microstache           as Mustache
 
 -- Orphan instances for Microstache Templates
+instance (TH.Lift a, TH.Lift b) => TH.Lift (Map a b) where
+  lift m = [|Map.fromAscList $(TH.lift $ Map.toAscList m)|]
 
 deriving instance TH.Lift Mustache.PName
 deriving instance TH.Lift Mustache.Key

@@ -10,6 +10,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE LambdaCase #-}
 
 module AuthService.Types where
 
@@ -27,6 +28,7 @@ import qualified Data.Text                  as Text
 import qualified Data.Text.Encoding         as Text
 import           Data.UUID                  (UUID)
 import qualified Data.UUID                  as UUID
+import           Data.Time.Clock            (UTCTime)
 import           Web.HttpApiData
 import           Web.PathPieces
 
@@ -206,7 +208,8 @@ data ReturnUserInfo = ReturnUserInfo { returnUserInfoId :: UserID
                                      , returnUserInfoPhone :: Maybe Phone
                                      , returnUserInfoInstances :: [ReturnInstance]
                                      , returnUserInfoRoles :: [Text]
-                                     }
+                                     , returnUserInfoDeactivate :: Maybe UTCTime
+                                     } deriving Show
 
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "returnUserInfo"}
            ''ReturnUserInfo
@@ -297,3 +300,32 @@ makeLensesWith camelCaseFields ''CreateAccount
 deriveJSON
   defaultOptions {fieldLabelModifier = dropPrefix "createAccount"}
   ''CreateAccount
+
+--------------------------------------------------------------------------------
+-- Account Disabling -----------------------------------------------------------
+--------------------------------------------------------------------------------
+
+data DeactivateAt = DeactivateNow
+                  | DeactivateAt UTCTime
+                  deriving (Show)
+
+instance ToJSON DeactivateAt where
+  toJSON DeactivateNow = String "now"
+  toJSON (DeactivateAt time) = toJSON time
+
+instance FromJSON DeactivateAt where
+  parseJSON (String "now") = return DeactivateNow
+  parseJSON v = DeactivateAt <$> parseJSON v
+
+makePrisms ''DeactivateAt
+
+data DeactivateUser =
+  DeactivateUser
+  { deactivateUserDeactivateAt :: DeactivateAt
+  } deriving (Show)
+
+makeLensesWith camelCaseFields ''DeactivateUser
+
+deriveJSON
+  defaultOptions {fieldLabelModifier = camelTo2 '_' . dropPrefix "deactivateUser"}
+  ''DeactivateUser

@@ -97,8 +97,7 @@ getAuthServiceConfig :: (MonadIO m, MonadLogger m) =>
                         Conf.Config
                      -> m Config
 getAuthServiceConfig conf = do
-    to <- getConf' "TOKEN_TIMEOUT" "token.timeout"
-                 (Right 3600) {- 1 hour -} conf
+    to <- getConfMaybe' "TOKEN_TIMEOUT" "token.timeout" conf
     otpl <- getConf' "OTP_LENGTH" "otp.length"
                  (Right 4) conf
     otpt <- getConf' "OTP_TIMEOUT" "otp.timeout"

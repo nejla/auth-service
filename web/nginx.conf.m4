@@ -90,9 +90,9 @@ http {
                 if ($instance = '') {
                   return 403;
                 }
-                proxy_pass http://AUTH_SERVICE/check-token/$token/$instance;
-                proxy_pass_request_body off;
-                proxy_set_header Content-Length "";
+                proxy_pass http://AUTH_SERVICE/check-token;
+                proxy_set_header X-Token $token
+                proxy_set_header X-Instance $instance
                 proxy_set_header X-Original-URI $request_uri;
                 proxy_set_header Accept application/json;
         }
@@ -210,6 +210,22 @@ http {
                 proxy_set_header X-Original-URI $request_uri;
         }
 
+
+        location /admin/ {
+              set $token $cookie_token;
+              if ($token = '') {
+                set $token $http_x_token;
+              }
+              if ($token = '') {
+                return 403;
+              }
+
+              proxy_set_header X-Original-URI $request_uri;
+              proxy_set_header X-Token $token;
+
+              proxy_pass http://AUTH_SERVICE/admin/;
+
+        }
 
         # Locations to redirect /auth.html
         location = /authentication/index.html {

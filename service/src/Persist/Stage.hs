@@ -12,10 +12,11 @@
 
 module Persist.Stage where
 
-import qualified Data.Aeson as Aeson
+import qualified Data.Aeson           as Aeson
 import           Data.Monoid
-import qualified Data.Text as Text
-import qualified Data.UUID as UUID
+import qualified Data.Text            as Text
+import qualified Data.UUID            as UUID
+import           Database.Esqueleto   (SqlString)
 import           Database.Persist.Sql
 import           Database.Persist.TH
 
@@ -73,3 +74,6 @@ deriving instance PersistFieldSql Phone
 
 deriving instance PersistField B64Token
 deriving instance PersistFieldSql B64Token
+
+instance SqlString Name
+instance SqlString Email

@@ -32,6 +32,7 @@ import           Network.Mail.Mime    (Address)
 import qualified Text.Microstache     as Mustache
 
 import           AuthService.Types
+import Control.Monad.Logger (LoggingT)
 
 --------------------------------------------------------------------------------
 -- Error
@@ -101,7 +102,7 @@ data EmailConfig = EmailConfig
   , emailConfigMkLink :: PwResetToken -> Text -- ^ Generate a link from a token
   }
 
-type OtpHandler = Phone -> Text -> API ()
+type OtpHandler = Phone -> Text -> LoggingT IO ()
 
 data AccountCreationConfig =
   AccountCreationConfig
@@ -110,7 +111,7 @@ data AccountCreationConfig =
   }
 
 data Config = Config
-  { configTimeout              :: Integer -- token timeout in seconds
+  { configTimeout              :: Maybe Integer -- token timeout in seconds
   , configOTPLength            :: Int
   , configOTPTimeoutSeconds    :: Integer
   , configTFARequired          :: Bool
@@ -129,35 +130,9 @@ data EmailData =
   , emailDataExpirationTime :: Text
   } deriving (Show)
 
---------------------------------------------------------------------------------
--- Monad
---------------------------------------------------------------------------------
-
-newtype ApiState = ApiState { apiStateConfig :: Config
-                            }
-
-type API a = NC.App ApiState 'NC.Privileged 'NC.ReadCommitted a
-
--- newtype API a = API { unAPI :: ReaderT ApiState IO a }
---               deriving ( Functor, Applicative, Monad, MonadIO
---                        , MonadThrow, MonadCatch)
-
-runDB :: ReaderT SqlBackend IO a -> API a
-runDB = NC.db'
-
-makeLensesWith camelCaseFields ''ApiState
 makeLensesWith camelCaseFields ''EmailData
 makeLensesWith camelCaseFields ''AccountCreationConfig
 makeLensesWith camelCaseFields ''Config
 makeLensesWith camelCaseFields ''EmailConfig
 makeLensesWith camelCaseFields ''SendmailConfig
 makeLensesWith camelCaseFields ''TwilioConfig
-
-getConfig ::  Lens' Config a -> API a
-getConfig g = NC.viewState $ config . g
-
-runAPI :: ConnectionPool -> Config -> API a -> IO a
-runAPI pool conf m =
-  let st = ApiState { apiStateConfig = conf }
-  in NC.runApp' (def & NC.useTransactionLevels .~ (conf ^. useTransactionLevels))
-                 pool st m

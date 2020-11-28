@@ -1,0 +1,36 @@
+version: '3.4'
+
+services:
+
+  test:
+    image: ${BASEIMAGE:-baseimage}
+    build:
+      context: .
+      target: baseimage
+    volumes:
+      - ./dist/tests:/tests:ro
+    environment:
+      DB_HOST: database
+    command: sh -ec 'for t in /tests/*; do $$t; done'
+    networks:
+      auth-service-test:
+    links:
+      - database
+      - email
+
+  database:
+    image: postgres:12
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    networks:
+      auth-service-test:
+
+  email:
+    image: mailhog/mailhog
+    networks:
+      auth-service-test:
+
+
+
+networks:
+  auth-service-test:

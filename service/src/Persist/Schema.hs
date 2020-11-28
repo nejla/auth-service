@@ -3,6 +3,7 @@
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -33,7 +34,8 @@ import Persist.Stage ()
 
 import NejlaCommon
 
-share [ mkPersist sqlSettings, mkMigrate "migrateAll"]
+share [ mkPersist sqlSettings
+      , mkMigrate "migrateAll", mkForeignInstances]
     $(persistFileWith lowerCaseSettings "src/schema")
 
 makeLensesWith camelCaseFields ''User
@@ -41,6 +43,3 @@ makeLensesWith camelCaseFields ''Instance
 makeLensesWith camelCaseFields ''UserOtp
 makeLensesWith camelCaseFields ''UserInstance
 makeLensesWith camelCaseFields ''Token
-
-instance ForeignKey PasswordResetToken User where
-  foreignPairs = [ForeignPair PasswordResetTokenUser UserUuid]

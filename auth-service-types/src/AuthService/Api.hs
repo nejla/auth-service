@@ -27,9 +27,9 @@ type ChangePasswordAPI = "change-password"
                        :> Post '[JSON] NoContent
 
 type CheckTokenAPI = "check-token"
-                  :> Capture "token" B64Token
-                  :> Capture "instance" InstanceID
                   :> Header "X-Original-URI" Text
+                  :> Header "X-Token" B64Token
+                  :> Header "X-Instance" InstanceID
                   :> Get '[JSON] (Headers '[ Header "X-User-ID" UserID
                                            , Header "X-User-Email" Email
                                            , Header "X-User-Name" Name
@@ -72,7 +72,26 @@ type CreateAccountAPI = "create-account"
 
 type CreateUserAPI = "users" :> ReqBody '[JSON] AddUser :> Post '[JSON] ReturnUser
 
-type AdminAPI = "admin" :> CreateUserAPI
+type GetUsersAPI = "users" :> Get '[JSON] [ReturnUserInfo]
+
+type DeactivateUserAPI = "users"
+                    :> Capture "user" UserID
+                    :> "deactivate"
+                    :> ReqBody '[JSON] DeactivateUser
+                    :> PostNoContent '[JSON] NoContent
+
+type ReactivateUserAPI = "users"
+                    :> Capture "user" UserID
+                    :> "reactivate"
+                    :> PostNoContent '[JSON] NoContent
+
+type AdminAPI = "admin"
+                 :> Header "X-Token" B64Token
+                 :> (CreateUserAPI
+                      :<|> GetUsersAPI
+                      :<|> DeactivateUserAPI
+                      :<|> ReactivateUserAPI
+                    )
 
 --------------------------------------------------------------------------------
 -- Interface

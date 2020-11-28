@@ -10,7 +10,6 @@ module Run where
 import           Control.Lens
 import           Control.Monad.Logger
 import           Control.Monad.Reader
-import           Control.Monad.Trans
 import qualified Data.Text                   as Text
 import qualified Data.Text.Encoding          as Text
 import qualified Data.Text.Encoding.Error    as Text
@@ -24,10 +23,13 @@ import           System.Environment
 import           System.Exit
 import           System.IO
 
-import           NejlaCommon                 (withPool)
+import           NejlaCommon                 (withPool, runPoolRetry)
 
 import           Api
+import           Audit
 import           Config
+import           Monad
+import           Persist.Migration           (doMigrate)
 import           Persist.Schema
 import           Types
 import           User
@@ -35,7 +37,7 @@ import           User
 logMiddleware :: Wai.Middleware
 logMiddleware app req respond = app req respond'
   where
-    debug f = hPutStrLn stderr $ "[Info#auth-serivce]" ++ f
+    debug f = hPutStrLn stderr $ "[Info#auth-service]" ++ f
     respond' res = do
       unless ( Wai.requestMethod req == "GET"
              && Wai.pathInfo req == ["status"]
@@ -67,9 +69,15 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
                 _ -> Prelude.id
 
     withPool confFile 5 $ \pool -> do
-        let run = liftIO . runAPI pool conf
-        _ <- liftIO $ runSqlPool (runMigrationSilent migrateAll) pool
         args <- liftIO getArgs
+        let appState = ApiState { apiStateConfig = conf
+                                , apiStateAuditSource =
+                                  AuditSourceCli { auditSourceCliArguments =
+                                                     Text.pack <$> args
+                                                 }
+                                }
+        let run = liftIO . runAPI pool appState
+        _ <- runPoolRetry pool doMigrate
         case args of
          ("adduser": args') -> do
              res <- run $ addUser (args' ^.. each . packed)
@@ -84,12 +92,17 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
          ("newinstance": args') -> run $ addInstance' args'
          ("addinstance": args') -> run $ userAddInstance args'
          ("removeinstance": args') -> run $ userRemoveInstance args'
+         ("deactivateuser": args') -> run $ userDeactivate' args'
+         ("reactivateuser": args') -> run $ userReactivate args'
          ["run"] -> liftIO $ Warp.run 80 (logM $ serveAPI pool conf)
          _ -> liftIO $ do
              hPutStrLn stderr
-               "Usage: auth-service [run|adduser|chpass|addrole|rmrole|newinstance|addinstance|removeinstance] [options]"
+               "Usage: auth-service [run|adduser|chpass|addrole|rmrole|newinstance|addinstance|removeinstance|\
+               \deactivateuser|eeactivateuser] [options]"
              exitFailure
 
+-- Compares the schema to the SQL server and prints out necessary changes. For
+-- development.
 checkMigration :: IO ()
 checkMigration = runStderrLoggingT $ do
   withPostgresqlConn "host=localhost user=postgres" $ \(conn :: SqlBackend) -> do

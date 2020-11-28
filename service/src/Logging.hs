@@ -52,6 +52,12 @@ data Event
                        , token:: !Text
                        , instanceId :: !InstanceID
                        }
+  | AdminRequestInvalidToken{ request :: !Text
+                            , token:: !Text
+                            }
+  | AdminRequestNotAdmin{ request :: !Text
+                        , token:: !Text
+                        }
   | RequestInvalidInstance{ user :: !Email
                           , request :: !Request
                           , tokenId :: !TokenRef
@@ -82,6 +88,10 @@ instance IsLogEvent Event where
     eventDetails "request_no_token" v
   toLogEvent v@RequestInvalidToken{}    =
     eventDetails "request_invalid_token" v
+  toLogEvent v@AdminRequestInvalidToken{}    =
+    eventDetails "admin_request_invalid_token" v
+  toLogEvent v@AdminRequestNotAdmin{}    =
+    eventDetails "admin_request_not_admin" v
   toLogEvent v@RequestInvalidInstance{} =
     eventDetails "request_invalid_instance" v
   toLogEvent v@Logout{}                 =

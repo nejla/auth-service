@@ -36,6 +36,7 @@ library
                      , mtl
                      , path-pieces
                      , servant
+                     , time
                      , text >=1.2
                      , uuid
   hs-source-dirs:      src

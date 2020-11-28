@@ -2,9 +2,11 @@ version: '2'
 
 services:
   database:
-    image: postgres:9.5
+    image: postgres:12.3
     networks:
       - auth-service
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
 
   auth-service:
     image: registry.nejla.com/nejla-ab/auth-service/auth-service
@@ -13,6 +15,9 @@ services:
       - mail
     environment:
       - log=true
+      - DB_HOST=database
+      - DB_USER=postgres
+      - DB_DATABASE=postgres
       - TWILIO_ACCOUNT=
       - TWILIO_TOKEN=
       - TWILIO_SOURCE=
@@ -35,7 +40,6 @@ services:
     #     gelf-address: udp://localhost:12201
     networks:
       - auth-service
-    command: /app/run.sh
 
   # One or more application containers
   upstream:

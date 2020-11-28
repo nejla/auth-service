@@ -12,14 +12,18 @@ library:
   - client
   - src
   ghc-options:
-  # - -Wall
+  - -Wall
   - -O2
+  - -Werror=incomplete-patterns
   exposed-modules:
   - Api
+  - Audit
   - AuthService
   - Backend
   - Config
   - Logging
+  - Monad
+  - Persist.Migration
   - Persist.Schema
   - Persist.Stage
   - Run
@@ -35,7 +39,9 @@ library:
   - bcrypt
   - bytestring
   - bytestring-conversion >=0.3
+  - case-insensitive
   - configurator
+  - containers
   - data-default
   - esqueleto
   - exceptions >=0.8
@@ -57,7 +63,6 @@ library:
   - servant-server >=0.4.4
   - template-haskell
   - text
-  - th-lift-instances
   - time >=1.5
   - uuid >=1.3
   - wai >=3.0
@@ -83,22 +88,28 @@ tests:
     ghc-options: -Wall
     dependencies:
     - base
+    - bytestring
     - QuickCheck
     - auth-service
     - exceptions >=0.8
     - hspec
+    - hspec-core
     - hspec-expectations
     - hspec-wai
     - hspec-wai-json
+    - interpolate
     - lens
     - microstache
     - monad-logger >=0.3
     - mtl >=2.2
     - nejla-common
+    - persistent
+    - persistent-postgresql
     - persistent-sqlite
     - resource-pool
     - text
     - time
+    - unliftio-core
     - uuid
     - wai
     - wai-extra
@@ -122,11 +133,16 @@ tests:
     - microstache
     - monad-logger >=0.3
     - mtl >=2.2
+    - nejla-common
+    - persistent
     - persistent-sqlite
+    - persistent-postgresql
     - resource-pool
+    - tasty
     - tasty-hunit
     - tasty-quickcheck
     - tasty-th
     - text
     - time
+    - unliftio-core
     - uuid

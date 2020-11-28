@@ -2,10 +2,14 @@ User
   uuid UserID
   Primary uuid
   email Email
-  UniqueUserEmail email
+-- UniqueUserEmail email
+-- We have a uniqueness constraint on lower("email") instead, but persistent
+-- can't handle this directly
+-- CREATE UNIQUE INDEX "unique_user_email" on "user" (LOWER(email));
   name Name
   passwordHash PasswordHash
   phone Phone Maybe
+  deactivate UTCTime Maybe
   deriving Show
 
 UserRole
@@ -58,3 +62,11 @@ PasswordResetToken
   expires UTCTime
   used UTCTime Maybe
   deriving Show
+
+AuditLog
+  time UTCTime
+  event Text
+  details Text
+  source Text
+  sourceDetails Text
+  user UserID Maybe -- Which user the log entry relates to (changes etc.) for easier aggregation

@@ -1,26 +1,33 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Test.Common where
 
+import           Control.Monad.IO.Unlift
 import           Control.Monad.Logger
-import           Data.Maybe              (fromJust)
-import           Data.Monoid
+import           Data.Maybe                        (fromJust)
 import           Data.Pool
 import           Data.Time.Clock
-import           Data.UUID               (UUID)
-import qualified Data.UUID               as UUID
-import           Database.Persist.Sqlite as SQLite
-import           Test.Hspec.Wai
-import qualified Text.Microstache        as Mustache
+import qualified Data.UUID                         as UUID
+import           Database.Persist.Postgresql       as Postgres
+import           Database.Persist.Sql              as P
+import qualified NejlaCommon                       as NC
+import qualified NejlaCommon.Config                as NC
+import           NejlaCommon.Persistence.Migration (sql)
+import qualified Text.Microstache                  as Mustache
 
-import qualified Persist.Schema          as DB
+import           Persist.Migration                 (doMigrate)
+
+import           Audit                             (AuditSource(AuditSourceTest))
+import           Monad
 import           Types
 
-withMemoryPool :: (Pool SqlBackend -> IO a) -> IO a
-withMemoryPool f = runNoLoggingT . withSqliteConn ":memory:" $ \con -> liftIO $ do
-  pool <- createPool (return con) (\_ -> return ()) 1 3600 1
-  f pool
+withPsqlPool :: (Pool SqlBackend -> NoLoggingT IO a) -> IO a
+withPsqlPool f = runNoLoggingT $ do
+  conf <- NC.loadConf "auth-service-test"
+  ci <- NC.getDBConnectInfo conf
+  NC.withDBPool ci 5 (return ()) f
 
 testEmailConfig :: EmailConfig
 testEmailConfig =
@@ -52,35 +59,110 @@ testEmailConfig =
         "Your email is unknown"
 
 
+accountCreationConfig :: AccountCreationConfig
 accountCreationConfig = AccountCreationConfig
   { accountCreationConfigEnabled = True
   , accountCreationConfigDefaultInstances =
-              [ InstanceID . fromJust $
-                UUID.fromText "de305d54-75b4-431b-adb2-eb6b9e546014"
+              [
               ]
   }
 
-withApiData :: Maybe OtpHandler -> (Pool SqlBackend -> Config -> IO a) -> IO a
-withApiData mbHandleOtp f =
-  withMemoryPool $ \pool -> do
+withTestDB :: (Pool SqlBackend -> IO a) -> IO a
+withTestDB f =
+  withPsqlPool $ \pool -> do
+    liftIO $ do
+      _ <- runLoggingT (NC.runPoolRetry pool dbSetup) (\_ _ _ _ -> return ())
+      f pool
+  where
+    dbSetup = do
+      resetDB
+      doMigrate
+      makeConstraintsDeferrable
+    resetDB = P.rawExecute
+      [sql|
+        SET client_min_messages TO ERROR;
+        DROP SCHEMA IF EXISTS _meta CASCADE;
+        DROP SCHEMA public CASCADE;
+        CREATE SCHEMA public;
+        GRANT ALL ON SCHEMA public TO postgres;
+        GRANT ALL ON SCHEMA public TO public;
+        COMMENT ON SCHEMA public IS 'standard public schema';
+        RESET client_min_messages;
+        |] []
+    -- Iterate over all foreign constraints and make them deferrable (so we can
+    -- DELETE them without having to worry about the order we do it in)
+    makeConstraintsDeferrable = P.rawExecute
+      [sql|
+          DO $$
+            DECLARE
+                statements CURSOR FOR
+                    SELECT c.relname AS tab, con.conname AS con
+                    FROM pg_constraint con
+                    INNER JOIN pg_class c
+                      ON con.conrelid = c.oid
+                    WHERE con.contype='f';
+            BEGIN
+                FOR row IN statements LOOP
+                    EXECUTE 'ALTER TABLE ' ||  quote_ident(row.tab) ||
+                            ' ALTER CONSTRAINT ' || quote_ident(row.con) ||
+                            ' DEFERRABLE;' ;
+                END LOOP;
+            END;
+          $$;
+      |] []
+
+type TestCase = Postgres.ConnectionPool -> IO ()
+
+mkConfig :: ConnectionPool
+           -> IO Config
+mkConfig pool = do
+    runSqlPool cleanDB pool
     let conf =
           Config
-          { configTimeout = 9999
+          { configTimeout = Nothing
           , configOTPLength = 6
           , configOTPTimeoutSeconds = 10
           , configTFARequired = True
-          , configOtp = mbHandleOtp
+          , configOtp = Nothing
           , configUseTransactionLevels = False
           , configEmail = Just testEmailConfig
           , configAccountCreation = accountCreationConfig
           }
-    liftIO $ do
-      _ <- runSqlPool (runMigrationSilent DB.migrateAll) pool
-      f pool conf
+    return conf
+  where
+    -- | Delete all rows from all tables (Don't use TRUNACE TABLE since it's
+    -- slower)
+    cleanDB = P.rawExecute
+      [sql|
+         SET client_min_messages TO ERROR;
+         SET CONSTRAINTS ALL DEFERRED;
+         DO $$
+         DECLARE
+             statements CURSOR FOR
+                 SELECT tablename FROM pg_tables
+                 WHERE schemaname = 'public';
+         BEGIN
+             FOR stmt IN statements LOOP
+                 EXECUTE 'DELETE FROM ' || quote_ident(stmt.tablename)
+                   || ';';
+             END LOOP;
+         END;
+         $$;
+         RESET client_min_messages;
+         |] []
 
-withRunAPI :: Maybe OtpHandler -> ((forall a. API a -> IO a) -> IO b) -> IO b
-withRunAPI mbOtpHandler f = withApiData mbOtpHandler
-                            $ \pool conf -> f $  runAPI pool conf
+
+withRunAPI :: (Config -> Config)
+           -> ConnectionPool
+           -> ((forall a. API a -> IO a) -> IO b)
+           -> IO b
+withRunAPI changeConf pool f = do
+  conf <- mkConfig pool
+  let apiState = ApiState { apiStateConfig = changeConf conf
+                          , apiStateAuditSource = AuditSourceTest
+                          }
+  f $ runAPI pool apiState
+
 
 seconds :: Integer -> NominalDiffTime
 seconds s = fromIntegral s
