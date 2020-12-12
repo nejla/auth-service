@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -e
 
@@ -72,6 +72,7 @@ run_db () {
 docker_setup () {
     db &> /dev/null <<EOF
 DROP SCHEMA public CASCADE;
+DROP SCHEMA _meta CASCADE;
 CREATE SCHEMA public
   AUTHORIZATION postgres;
 
@@ -149,6 +150,7 @@ login() {
     fi
 
     RES=$($CURL -H "Content-Type: application/json" \
+                --fail \
                 -d "$LOGIN_STRING" \
                 http://$API/login)
 
@@ -260,7 +262,7 @@ docker_test() {
       echo
     fi
 
-    docker_setup &> /dev/null
+    docker_setup #  &> /dev/null
     testing "Trying log in"
     login || fail "could not log in"
     testing "Checking token"
@@ -423,6 +425,10 @@ docker_test() {
     OTP=$(echo $OTP | tr '[:upper:]' '[:lower:]')
     login $USER2 $PASSWORD2 $OTP || fail "could not log in"
 
+    testing "Trying to login without otp"
+    create_otp $USER2 $PASSWORD2
+    login $USER2 $PASSWORD2 && fail "Login did not require OTP"
+
     testing "Trying to double-use OTP"
     create_otp $USER2 $PASSWORD2
     get_otp
@@ -430,7 +436,7 @@ docker_test() {
     OTP=$(echo $OTP | tr '[:upper:]' '[:lower:]')
     login $USER2 $PASSWORD2 $OTP || fail "could not log in"
     logout
-    login $USER2 $PASSWORD2 $OTP && fail "Double-used password"
+    login $USER2 $PASSWORD2 $OTP && fail "Double-used OTP"
 
     testing "Testing logout"
     logout

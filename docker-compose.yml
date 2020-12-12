@@ -1,4 +1,4 @@
-version: '2'
+version: '3'
 
 services:
   database:
@@ -52,7 +52,7 @@ services:
       - auth-service
 
   auth-web:
-    build: web
+    image: registry.nejla.com/nejla-ab/auth-service/auth-web:${AUTHWEBTAG:-latest}
     links:
       - auth-service
       # Link upstream containers to their instance IDs

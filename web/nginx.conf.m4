@@ -8,6 +8,10 @@
 #    -DPORT=80 \
 #    nginx.conf.m4 \
 #    > nginx.conf
+#
+# As part of the auth-web container, parameters are set in the run.sh script
+# That is, variables like NORATELIMIT you see in here are NOT environment variables
+# but are instead explicitly set in run.sh. See run.sh for more details
 
 worker_processes 1;
 
@@ -91,8 +95,8 @@ http {
                   return 403;
                 }
                 proxy_pass http://AUTH_SERVICE/check-token;
-                proxy_set_header X-Token $token
-                proxy_set_header X-Instance $instance
+                proxy_set_header X-Token $token;
+                proxy_set_header X-Instance $instance;
                 proxy_set_header X-Original-URI $request_uri;
                 proxy_set_header Accept application/json;
         }
@@ -190,7 +194,7 @@ http {
                 limit_req zone=login burst=3 nodelay;')
                 proxy_pass http://AUTH_SERVICE/reset-password/;
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/EXPIRE";
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/expire";
         }
 
         location = /reset-password-info {
@@ -200,7 +204,7 @@ http {
                 proxy_pass_request_body off;
                 proxy_set_header Content-Length "";
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/EXPIRE";
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/expire";
         }
 
         location = /create-account {

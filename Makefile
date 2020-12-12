@@ -6,45 +6,50 @@ include $(build-env-file)
 
 WEB_IMAGE=$(REGISTRY)/$(WEB_IMAGE_NAME)
 
-all: auth-web-container
+.PHONY: all
+all: auth-web.image
 	$(MAKE) -C service all
 
 .PHONY: service/image
 service/image:
 	$(MAKE) -C service image
 
+.PHONY: test
 test: unittests systemtests
 
+.PHONY: unittests
 unittests:
 	$(MAKE) -C service test
 
 systemtests: export NORATELIMIT=true
-systemtests:
-	docker-compose up -d
+systemtests: up
 	tests/test dockertest
-	make down
+	$(MAKE) down
 
-auth-web-container:
-	docker build -t $(WEB_IMAGE) web
-	docker tag $(WEB_IMAGE):latest $(WEB_IMAGE):latest
-	docker tag $(WEB_IMAGE):latest $(WEB_IMAGE):$(TAG)
+auth-web-deps := $(shell find web)
 
+auth-web.image: $(auth-web-deps)
+	docker build -t $(WEB_IMAGE):$(TAG) web
+	echo -n "$(TAG)" > auth-web.image
 
-run: service/image auth-web-container
+.PHONY: run
+run: service/image auth-web.image
 	docker-compose up
 
-up: service/image auth-web-container
+.PHONY: up
+up: service/image auth-web.image
 	docker-compose up -d
 
+.PHONY: down
 down:
 	docker-compose down --remove-orphans -v
 
+.PHONY: push
 push:
 	$(MAKE) -C service push
 	docker push $(WEB_IMAGE):$(TAG)
 	docker push $(WEB_IMAGE):latest
 
+.PHONY: clean
 clean:
 	$(MAKE) -C service clean
-
-.PHONY: all build run up down push service-container auth-web-container unittests systemtests test clean

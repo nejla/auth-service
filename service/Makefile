@@ -33,18 +33,17 @@ image: dist/auth-service Dockerfile ../.git
 	  -t "${SERVICE_IMAGE}:${TAG}" .
 	docker tag "${SERVICE_IMAGE}:${TAG}" \
 	           "${SERVICE_IMAGE}:latest"
-	touch image
+	echo "$(TAG)" > image
 
-# Dont build, just push
 .PHONY: push-image
-push-image:
-	docker push $(SERVICE_IMAGE):$(TAG)
+push-image: image
+	docker push "$(SERVICE_IMAGE):$(shell cat image)"
 
 # Depend on image to ensure that baseimage is up to date with latest built image
 baseimage: image
 	docker build . --pull --target baseimage \
 	  -t "$(TEST_IMAGE):$(TAG)"
-	touch baseimage
+	echo "$(TAG)" > baseimage
 
 .PHONY: push-baseimage
 push-baseimage:

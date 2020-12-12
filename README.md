@@ -148,7 +148,8 @@ Note that of you set _any_ of the twilio options you have to set _all_ of them.
 
 You can set the following environment variables:
 
-* `COOKIE` (String) _optional_: If set to `permanent` cookies are permanent, otherwise cookies are sent as session cookies
+* `COOKIE` (String) _optional_: If set to `session` cookies are session cookies,
+  if set to `permanent` or unset cookies will be permanent.
 
 ## Configuring the frontend proxy container
 
