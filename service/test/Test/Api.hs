@@ -4,6 +4,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 module Main where
 
@@ -19,8 +20,9 @@ import qualified                Data.Text.Encoding               as Text
 import                          Data.Time.Clock                  (getCurrentTime)
 import                          Data.UUID                        (UUID)
 import qualified                Data.UUID                        as UUID
-import                          Test.Hspec.Core.Spec
+import qualified                SignedAuth
 import                          Test.Hspec
+import                          Test.Hspec.Core.Spec
 import                          Test.Hspec.Wai
 import                          Test.Hspec.Wai.JSON
 
@@ -28,28 +30,34 @@ import                          Network.Wai                      (Application)
 import                          Network.Wai.Test                 (SResponse)
 
 import qualified "auth-service" Api
-import                          Audit (AuditSource(AuditSourceTest))
+import                          Audit                            (AuditSource(AuditSourceTest))
 import                          Backend
 import                          Monad
 import                          Test.Common
 import                          Types
 
-import                          NejlaCommon.Test                 as NC
+import                          Control.Concurrent               (threadDelay)
+import                          NejlaCommon.Test                 (postJ)
+import qualified                NejlaCommon.Test                 as NC
 
 iid :: UUID
-Just iid = UUID.fromString "3afe62f4-7235-4b86-a418-923aaa4a5c28"
+iid = case UUID.fromString "3afe62f4-7235-4b86-a418-923aaa4a5c28" of
+        Just uuid -> uuid
+        Nothing -> error "uuid"
 
-runTest :: SpecWith ((), (Config -> Config)-> Application) -> IO ()
+runTest :: SpecWith ((), (Config -> Config) -> Application) -> IO ()
 runTest spec = withTestDB $ \pool -> do
   hspec $ flip around spec $ \f -> do
-    conf <- mkConfig pool
+    (conf, secrets) <- mkConfig pool
+    noncePool <- SignedAuth.newNoncePool
     let apiState = ApiState { apiStateConfig = conf
                             , apiStateAuditSource = AuditSourceTest
+                            , apiStateNoncePool = noncePool
                             }
     _ <- runAPI pool apiState $ do
       createUser adminUser
       addInstance (Just $ InstanceID iid) "instance1"
-    f ((), \cc -> Api.serveAPI pool $ cc conf)
+    f ((), \cc -> Api.serveAPI pool noncePool (cc conf) secrets)
   where
     adminUser = AddUser { addUserUuid      = Nothing
                         , addUserEmail     = "admin@example.com"
@@ -78,6 +86,7 @@ spec :: SpecWith ((), (Config -> Config) -> Application)
 spec = do
   describe "admin API" adminApiSpec
   describe "create account API" createAccountSpec
+  describe "rate limiting" rateLimitSpec
 
 
 exampleUser :: Text -> [Text] -> BSL.ByteString
@@ -92,14 +101,14 @@ exampleUser name roles =
 addUser :: Text -> Text -> [Text] -> WaiSession st UUID
 addUser token name roles = do
   res <- postToken token "/admin/users" (exampleUser name roles)
-    `shouldReturnA` (Proxy @Types.ReturnUser)
+    `NC.shouldReturnA` (Proxy @Types.ReturnUser)
   return $ res ^. user . _UserID
 
 loginReq :: Text -> Text -> WaiSession st Text
 loginReq username password = do
   res <- postJ [i|/login|] [json|{ "user": #{username <> "@example.com"}
                                  , "password": #{password}
-                                }|] `shouldReturnA` (Proxy @Types.ReturnLogin)
+                                }|] `NC.shouldReturnA` (Proxy @Types.ReturnLogin)
   return $ res ^. token . _B64Token
 
 withAdminToken :: (Text -> WaiSession st b) -> WaiSession st b
@@ -240,30 +249,29 @@ adminApiSpec = do
         _ <- addUser admin "peter" []
         _ <- addUser admin "robert" []
         res <- getToken admin "/admin/users"
-                `shouldReturnA` (Proxy @[Types.ReturnUserInfo])
+                `NC.shouldReturnA` (Proxy @[Types.ReturnUserInfo])
         -- "admin@example.com" is always added since we need admin privileges to
         -- run admin endpoints
-        res ^.. each . email `NC.shouldBe` ([ "admin@example.com"
-                                            , "peter@example.com"
-                                            , "robert@example.com"])
+        res ^.. each . email `NC.shouldBe` [ "admin@example.com"
+                                           , "peter@example.com"
+                                           , "robert@example.com"]
 
   describe "/admin/users/<uid>/deactivate" $ do
     describe "now" $ do
       it "prevents a user from logging in"
-       $ withDefaultConfig $ withAdminToken $ \admin-> do
+       $ withDefaultConfig $ withAdminToken $ \admin -> do
         uid <- addUser admin "robert" []
         postToken admin [i|/login|] [json|{ "user": "robert@example.com"
-                                , "password": "pwd"
-                                }|] `shouldRespondWith` 200
-
+                                          , "password": "pwd"
+                                          }|] `shouldRespondWith` 200
 
         postToken admin [i|/admin/users/#{uid}/deactivate|]
                         [json|{"deactivate_at": "now"}|]
               `shouldRespondWith` 204
 
         postToken admin [i|/login|] [json|{ "user": "robert@example.com"
-                                , "password": "pwd"
-                                }|] `shouldRespondWith` 403
+                                          , "password": "pwd"
+                                          }|] `shouldRespondWith` 403
       it "disables existing tokens"
        $ withDefaultConfig $ withAdminToken $ \admin-> do
         uid <- addUser admin "robert" []
@@ -314,7 +322,7 @@ adminApiSpec = do
                               , "password": "pwd"
                               }|] `shouldRespondWith` 200
   describe "/admin/users/<uid>/reactivate" $ do
-    it "Should allow a user to log in again"
+    it "Allows a user to log in again"
      $ withDefaultConfig $ withAdminToken $ \admin-> do
       uid <- addUser admin "robert" []
       postToken admin [i|/admin/users/#{uid}/deactivate|]
@@ -327,3 +335,50 @@ adminApiSpec = do
       postToken admin [i|/login|] [json|{ "user": "robert@example.com"
                               , "password": "pwd"
                               }|] `shouldRespondWith` 200
+
+rateLimitSpec :: SpecWith ((), (Config -> Config) -> Application)
+rateLimitSpec =
+  describe "/login" $ do
+    it "Limits login attempts" $
+      WithConfig (  (maxAttempts .~ 1)
+                  . (attemptsTimeframe .~ 1)
+                  ) $ do
+        postJ [i|/login|] [json|{ "user": "user@example.com"
+                                , "password": "false"
+                                }|] `shouldRespondWith` 403
+        postJ [i|/login|] [json|{ "user": "user@example.com"
+                                , "password": "false"
+                                }|] `shouldRespondWith` 429
+
+    it "Also limits correct credentials" $
+      WithConfig (  (maxAttempts .~ 1)
+                  . (attemptsTimeframe .~ 1)
+                  ) $ do
+        postJ [i|/login|] [json|{ "user": "admin@example.com"
+                                , "password": "false"
+                                }|] `shouldRespondWith` 403
+        postJ [i|/login|] [json|{ "user": "admin@example.com"
+                                , "password": "pwd"
+                                }|] `shouldRespondWith` 429
+
+    it "Does not count successful attempts" $
+      WithConfig (  (maxAttempts .~ 1)
+                  . (attemptsTimeframe .~ 1)
+                  ) $ do
+        replicateM_ 5 $ loginReq "admin" "pwd"
+
+    it "Allows more login attempts after the time frame runs out" $
+      WithConfig (  (maxAttempts .~ 1)
+                  . (attemptsTimeframe .~ 0.5)
+                  ) $ do
+        postJ [i|/login|] [json|{ "user": "user@example.com"
+                                , "password": "false"
+                                }|] `shouldRespondWith` 403
+        postJ [i|/login|] [json|{ "user": "user@example.com"
+                                , "password": "false"
+                                }|] `shouldRespondWith` 429
+
+        liftIO $ threadDelay 500_000
+        postJ [i|/login|] [json|{ "user": "user@example.com"
+                                , "password": "false"
+                                }|] `shouldRespondWith` 403

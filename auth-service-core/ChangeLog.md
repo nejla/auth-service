@@ -1,4 +1,4 @@
-# Revision history for auth-service-types
+# Revision history for auth-service-core
 
 ## 0.1.0.0  -- YYYY-mm-dd
 

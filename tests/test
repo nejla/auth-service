@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# This is the system test suite for auth-service.
+#
+# How to run:
+# In the parent directory:
+# > make up
+# Then run this script like this:
+# > ./test dockertest
+
 set -e
 
 if [[ -n $DEBUG ]]; then
@@ -249,6 +257,21 @@ runtest() {
 check_connection() {
     res=$(curl "$WEB_HOST" --silent -o /dev/null -w "%{http_code}")
     [[ $res = 200 ]]
+}
+
+function decode_b64 {
+  read -r input
+  _l=$((${#input} % 4))
+  if [ $_l -eq 2 ]; then _s="$input"'=='
+  elif [ $_l -eq 3 ]; then _s="$input"'='
+  else _s="$input" ;
+  fi
+  echo "$_s" | tr '_-' '/+' | openssl enc -d -a -A
+}
+
+# Parse JWS (ignore signature and header)
+parse_jws () {
+  cut -d '.' -f 2 | decode_b64
 }
 
 docker_test() {
@@ -502,9 +525,11 @@ docker_test() {
     login
     RES=$($CURL -H "X-Instance: $INSTANCE" \
                 -H "X-Token: $TOKEN" \
-                http://$API/roles \
+                http://$API/auth-header \
+            | parse_jws \
+            | jq -r '.roles | sort | join(",")'
        )
-    [[ "$RES"  == "Roles:testrole,user" ]] || fail "Roles were not set"
+    [[ "$RES"  == "testrole,user" ]] || fail "Roles were not set: $RES"
 
     testing "Account Creation"
     http "http://$API/create-account" \

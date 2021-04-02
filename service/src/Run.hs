@@ -19,6 +19,7 @@ import           Network.HTTP.Types          as HTTP
 import qualified Network.Socket              as Net
 import qualified Network.Wai                 as Wai
 import qualified Network.Wai.Handler.Warp    as Warp
+import qualified SignedAuth
 import           System.Environment
 import           System.Exit
 import           System.IO
@@ -70,13 +71,17 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
 
     withPool confFile 5 $ \pool -> do
         args <- liftIO getArgs
+        noncePool <- liftIO SignedAuth.newNoncePool
+        -- AppState for CLI invocations
         let appState = ApiState { apiStateConfig = conf
                                 , apiStateAuditSource =
                                   AuditSourceCli { auditSourceCliArguments =
                                                      Text.pack <$> args
                                                  }
+                                , apiStateNoncePool = noncePool
                                 }
-        let run = liftIO . runAPI pool appState
+        let run :: forall a m. MonadIO m => API a -> m a
+            run = liftIO . runAPI pool appState
         _ <- runPoolRetry pool doMigrate
         case args of
          ("adduser": args') -> do
@@ -94,7 +99,9 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
          ("removeinstance": args') -> run $ userRemoveInstance args'
          ("deactivateuser": args') -> run $ userDeactivate' args'
          ("reactivateuser": args') -> run $ userReactivate args'
-         ["run"] -> liftIO $ Warp.run 80 (logM $ serveAPI pool conf)
+         ["run"] -> do
+           secrets <- getSecrets confFile
+           liftIO $ Warp.run 80 (logM $ serveAPI pool noncePool conf secrets)
          _ -> liftIO $ do
              hPutStrLn stderr
                "Usage: auth-service [run|adduser|chpass|addrole|rmrole|newinstance|addinstance|removeinstance|\

@@ -39,6 +39,12 @@ migrations =
               , script = rawExecute
                            $(sqlFile "src/Persist/migrations/04-add-audit-log.sql") []
               }
+  , Migration { expect = Just "4"
+              , to = "5"
+              , description = "Add login_attempt table"
+              , script = rawExecute
+                           $(sqlFile "src/Persist/migrations/05-login-attempt.sql") []
+              }
   ]
 
 doMigrate :: M ()

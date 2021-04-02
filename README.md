@@ -144,6 +144,12 @@ Note that of you set _any_ of the twilio options you have to set _all_ of them.
 * `ACCOUNT_CREATION` (Bool) _optional_: Whether new users are allowed to create accounts (default: false)
 * `DEFAULT_INSTACE` (UUID) _optional_: Default instance to set on new accounts (e.g. `6595bcf6-ba54-4054-b09a-f67618a9ba3b`)
 
+### Signed Headers
+* ` SIGNED_HEADERS_PRIVATE_KEY_PATH` (path) _optional_: Path to the
+  base64-DER-encoded ed25519 private key to sign headers with. (default:
+  /run/secrets/header_signing_private_key)
+  See [Library documentation](Doc/Library.md) for instructions how to create it
+
 ## Configuring the auth-web container
 
 You can set the following environment variables:
@@ -215,6 +221,10 @@ to provide :
 Please note that only a Swedish version of the markup is available at this time.
 
 Please see auth-service.config for the configuration options.
+
+## Using Auth-service in a backend
+
+See [Library documentation](Doc/Library.md)
 
 # Managing users
 

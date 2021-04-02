@@ -66,7 +66,7 @@ instance FromJSON InstanceID where
     parseJSON v = do
         txt <- parseJSON v
         case UUID.fromText txt of
-         Nothing -> fail $ "Can't parse UUID " <> (Text.unpack txt)
+         Nothing -> fail $ "Can't parse UUID " <> Text.unpack txt
          Just uuid -> return $ InstanceID uuid
 
 instance ToByteString InstanceID where
@@ -92,7 +92,7 @@ instance FromJSON UserID where
     parseJSON v = do
         txt <- parseJSON v
         case UUID.fromText txt of
-         Nothing -> fail $ "Can't parse UUID " <> (Text.unpack txt)
+         Nothing -> fail $ "Can't parse UUID " <> Text.unpack txt
          Just uuid -> return $ UserID uuid
 
 instance ToByteString UserID where
@@ -149,11 +149,21 @@ newtype B64Token = B64Token { unB64Token :: Text }
 makePrisms ''B64Token
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "unB64"} ''B64Token
 
+type Role = Text
+
+data AuthHeader = AuthHeader { authHeaderUserID :: UserID
+                             , authHeaderEmail :: Email
+                             , authHeaderName :: Name
+                             , authHeaderRoles :: [Role]
+                             }
+
+makeLensesWith camelCaseFields ''AuthHeader
+deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "authHeader"} ''AuthHeader
+
 --------------------------------------------------------------------------------
 -- User
 --------------------------------------------------------------------------------
 
-type Role = Text
 
 data AddUser = AddUser { addUserUuid      :: Maybe UserID
                        , addUserEmail     :: Email
@@ -167,21 +177,6 @@ data AddUser = AddUser { addUserUuid      :: Maybe UserID
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "addUser"} ''AddUser
 makeLensesWith camelCaseFields ''AddUser
 
-newtype Roles = Roles
-  { unRoles :: [Role]
-  } deriving (Show)
-
-instance ToHttpApiData Roles where
-  toUrlPiece (Roles roles)= Text.intercalate "," roles
-
-instance FromHttpApiData Roles where
-  parseUrlPiece txt =
-    let roles = Text.split (== ',') txt
-    in case roles of
-         [""] -> Right $ Roles []
-         _ -> case any Text.null roles of
-                True -> Left "Empty roles"
-                False -> Right $ Roles roles
 
 data ReturnUser = ReturnUser { returnUserUser :: UserID
                              , returnUserRoles :: [Role]

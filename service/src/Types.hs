@@ -25,14 +25,16 @@ import qualified Control.Monad.Catch  as Ex
 import           Control.Monad.Reader
 import           Data.Default
 import           Data.Text            (Text)
+import           Data.Time            (NominalDiffTime)
 import           Data.Typeable
 import           Database.Persist.Sql
 import qualified NejlaCommon          as NC
 import           Network.Mail.Mime    (Address)
 import qualified Text.Microstache     as Mustache
 
+import qualified SignedAuth
 import           AuthService.Types
-import Control.Monad.Logger (LoggingT)
+import           Control.Monad.Logger (LoggingT)
 
 --------------------------------------------------------------------------------
 -- Error
@@ -48,7 +50,8 @@ instance Ex.Exception EmailError
 data LoginError = LoginErrorFailed -- Username not found, password wrong or OTP
                                    -- wrong
                 | LoginErrorOTPRequired
-                | LoginTwilioNotConfigured
+                | LoginErrorTwilioNotConfigured
+                | LoginErrorRatelimit
                   deriving (Show, Eq)
 
 makePrisms ''LoginError
@@ -112,6 +115,11 @@ data AccountCreationConfig =
 
 data Config = Config
   { configTimeout              :: Maybe Integer -- token timeout in seconds
+  , configMaxAttempts          :: Integer -- Number of password attempts per
+                                          -- time frame (e.g. 5 in the last minute)
+  , configAttemptsTimeframe    :: NominalDiffTime
+                                  -- Time frame in which login attempts are
+                                  -- counted (e.g. 60 for one minute)
   , configOTPLength            :: Int
   , configOTPTimeoutSeconds    :: Integer
   , configTFARequired          :: Bool
@@ -121,6 +129,11 @@ data Config = Config
 
   , configAccountCreation      :: AccountCreationConfig
   }
+
+data Secrets =
+  Secrets
+    { secretsHeaderPrivateKey     :: SignedAuth.PrivateKey
+    }
 
 -- | Necessary data to fill in a password reset email
 data EmailData =
@@ -133,6 +146,7 @@ data EmailData =
 makeLensesWith camelCaseFields ''EmailData
 makeLensesWith camelCaseFields ''AccountCreationConfig
 makeLensesWith camelCaseFields ''Config
+makeLensesWith camelCaseFields ''Secrets
 makeLensesWith camelCaseFields ''EmailConfig
 makeLensesWith camelCaseFields ''SendmailConfig
 makeLensesWith camelCaseFields ''TwilioConfig

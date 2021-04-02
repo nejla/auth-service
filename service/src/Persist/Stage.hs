@@ -28,7 +28,7 @@ derivePersistFieldJSON "Aeson.Object"
 instance PersistField UserID where
     toPersistValue = toPersistValue . UUID.toString . unUserID
     fromPersistValue = \x -> case x of
-        PersistDbSpecific bs ->
+        PersistLiteralEscaped bs ->
             case UUID.fromASCIIBytes bs of
              Nothing -> Left $ "Invalid UUID: " <> (Text.pack $ show bs)
              Just u -> Right $ UserID u
@@ -44,7 +44,7 @@ instance PersistFieldSql UserID where
 instance PersistField InstanceID where
     toPersistValue = toPersistValue . UUID.toString . unInstanceID
     fromPersistValue = \x -> case x of
-        PersistDbSpecific bs ->
+        PersistLiteralEscaped bs ->
             case UUID.fromASCIIBytes bs of
              Nothing -> Left $ "Invalid UUID: " <> (Text.pack $ show bs)
              Just u -> Right $ InstanceID u

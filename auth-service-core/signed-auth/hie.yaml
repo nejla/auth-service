@@ -1,0 +1,8 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "signed-authorization:lib"
+    - path: "./test-suite"
+      component: "signed-authorization:test:tests"
+    - path: "./app"
+      component: "signed-authorization:exe:app"

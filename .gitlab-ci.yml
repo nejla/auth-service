@@ -2,12 +2,12 @@ image: nejla/haskell-build
 
 stages:
   - build
+  - build-images
   - test
 
 variables:
   stack_args: --no-docker
   TAG: $CI_COMMIT_SHA
-  REGISTRY: registry.nejla.com/nejla-ab/auth-service
   APP_TEST_BASEIMAGE_NAME: baseimage
 
 build:
@@ -22,16 +22,95 @@ build:
     - '[[ -d $HOME/.stack ]] || ln -s $PWD/.stack-cache $HOME/.stack'
     - scripts/registry-login
   script:
-    - make all
-    - make push
+    - make -C service dist/auth-service tests
   artifacts:
     paths:
       - service/dist
+      - dist/doc
   cache:
     paths:
       - '.stack-cache'
       - 'service/.stack-work'
     key: "auth-service"
+
+build-auth-web-image:
+  stage: build-images
+  variables:
+    IMAGE_NAME: auth-web
+    DESTINATION: $REGISTRY/$IMAGE_NAME:$CI_COMMIT_SHA
+    EXTRA_DESTINATION: $REGISTRY/$IMAGE_NAME:latest
+  image:
+    # The debug image contains the shell needed by gitlab-ci, resetting the
+    # entrypoint makes it available as a command
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" \
+      > /kaniko/.docker/config.json
+  script:
+    - if [ $CI_COMMIT_BRANCH = "master" ]; then EXTRA_ARGS="--destination $EXTRA_DESTINATION"; fi
+    - 'echo "Building with --destination $DESTINATION $EXTRA_ARGS"'
+    - /kaniko/executor --context $CI_PROJECT_DIR/web
+                       --dockerfile $CI_PROJECT_DIR/web/Dockerfile
+                       --cache=true
+                       --destination "$DESTINATION"
+                       $EXTRA_ARGS
+    - 'echo "Built: $DESTINATION"'
+
+build-auth-service-baseimage:
+  stage: build-images
+  variables:
+    IMAGE_NAME: baseimage
+    DESTINATION: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
+  image:
+    # The debug image contains the shell needed by gitlab-ci, resetting the
+    # entrypoint makes it available as a command
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" \
+      > /kaniko/.docker/config.json
+  script:
+    - 'echo "Building: $DESTINATION"'
+    - /kaniko/executor --context $CI_PROJECT_DIR/service
+                       --dockerfile $CI_PROJECT_DIR/service/Dockerfile
+                       --cache=true
+                       --target baseimage
+                       --destination "$DESTINATION"
+    - 'echo "Built: $DESTINATION"'
+  dependencies:
+    - build
+
+
+build-auth-service-image:
+  stage: build-images
+  variables:
+    IMAGE_NAME: auth-service
+    DESTINATION: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
+    EXTRA_DESTINATION: $REGISTRY/$IMAGE_NAME:latest
+  image:
+    # The debug image contains the shell needed by gitlab-ci, resetting the
+    # entrypoint makes it available as a command
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" \
+      > /kaniko/.docker/config.json
+  script:
+    - if [ $CI_COMMIT_BRANCH = "master" ]; then EXTRA_ARGS="--destination $EXTRA_DESTINATION"; fi
+    - 'echo "Building with --destination $DESTINATION $EXTRA_ARGS"'
+    - /kaniko/executor --context $CI_PROJECT_DIR/service
+                       --dockerfile $CI_PROJECT_DIR/service/Dockerfile
+                       --cache=true
+                       --destination "$DESTINATION"
+                       $EXTRA_ARGS
+    - 'echo "Built: $DESTINATION"'
+  dependencies:
+    - build
+
 
 test-backend:
   stage: test

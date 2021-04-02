@@ -1,13 +1,16 @@
-resolver: lts-16.21
+resolver: lts-17.5
 
 extra-deps:
   - git: git@git.nejla.com:nejla-ab/common.git
-    commit: a5fbeb7f3aa4de723dc7cd5f2482178f1dba992c
-  - '../auth-service-types'
+    commit: 88595e7060e80064b3f8706b1daa9ca7b126326c
+  - '../auth-service-core'
+  - base64-bytestring-1.2.0.1
 
 docker:
   enable: false
   image: nejla/haskell-build
+
+allow-newer: true
 
 nix:
   # shell-file: stack.nix

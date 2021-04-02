@@ -63,6 +63,13 @@ PasswordResetToken
   used UTCTime Maybe
   deriving Show
 
+LoginAttempt
+  time UTCTime
+  remoteAddress Text
+  -- No Foreign key to user because we want to capture attempts to non-existing users
+  email Text
+
+
 AuditLog
   time UTCTime
   event Text

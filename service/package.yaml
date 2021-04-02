@@ -7,14 +7,28 @@ license: AllRightsReserved
 extra-source-files:
 - src/schema
 
+default-extensions:
+  - TypeSynonymInstances
+  - FlexibleInstances
+  - RankNTypes
+  - FunctionalDependencies
+  - MultiParamTypeClasses
+  - StrictData
+  - GADTs
+  - KindSignatures
+  - DataKinds
+
+
+ghc-options:
+  - -Wall
+  - -Werror=incomplete-patterns
+  - -Werror=incomplete-uni-patterns
+  - -Werror=incomplete-record-updates
+
 library:
   source-dirs:
   - client
   - src
-  ghc-options:
-  - -Wall
-  - -O2
-  - -Werror=incomplete-patterns
   exposed-modules:
   - Api
   - Audit
@@ -34,7 +48,7 @@ library:
   dependencies:
   - base >=4 && <5
   - aeson
-  - auth-service-types
+  - auth-service-core
   - base64-bytestring >=1.0
   - bcrypt
   - bytestring
@@ -64,6 +78,7 @@ library:
   - template-haskell
   - text
   - time >=1.5
+  - unix
   - uuid >=1.3
   - wai >=3.0
   - warp
@@ -88,9 +103,11 @@ tests:
     ghc-options: -Wall
     dependencies:
     - base
-    - bytestring
     - QuickCheck
     - auth-service
+    - auth-service-core
+    - bytestring
+    - data-default
     - exceptions >=0.8
     - hspec
     - hspec-core
@@ -113,7 +130,6 @@ tests:
     - uuid
     - wai
     - wai-extra
-    - data-default
 
   unit-tests:
     main: Test.hs
@@ -125,6 +141,7 @@ tests:
     - base
     - QuickCheck
     - auth-service
+    - auth-service-core
     - data-default
     - exceptions >=0.8
     - hspec-expectations
@@ -135,8 +152,8 @@ tests:
     - mtl >=2.2
     - nejla-common
     - persistent
-    - persistent-sqlite
     - persistent-postgresql
+    - persistent-sqlite
     - resource-pool
     - tasty
     - tasty-hunit

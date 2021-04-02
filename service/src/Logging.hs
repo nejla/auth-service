@@ -39,6 +39,7 @@ type TokenRef = Int64
 
 data AuthFailedReason = AuthFailedReasonWrongPassword
                       | AuthFailedReasonWrongOtp
+                      | AuthFailedReasonRateLimit
                       deriving (Show)
 
 data Event

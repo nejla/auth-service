@@ -1,6 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 
@@ -20,6 +17,8 @@ import qualified NejlaCommon          as NC
 import           Types
 import           Audit
 
+import qualified SignedAuth
+
 --------------------------------------------------------------------------------
 -- Api Monad -------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -27,6 +26,7 @@ import           Audit
 type Ctx = ApiState
 data ApiState = ApiState { apiStateConfig :: Config
                          , apiStateAuditSource :: AuditSource
+                         , apiStateNoncePool :: SignedAuth.NoncePool
                          }
 
 makeLensesWith camelCaseFields ''ApiState

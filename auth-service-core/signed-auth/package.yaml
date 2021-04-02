@@ -1,0 +1,89 @@
+name: signed-authorization
+version: '0.0.0'
+synopsis: An example project
+description: An example project
+maintainer: Philipp Balzarek
+
+dependencies:
+  - base
+  - bytestring
+  - containers
+  - lens
+  - lens-aeson
+  - mtl
+  - text
+  - time
+
+default-extensions:
+  - ApplicativeDo
+  - ConstraintKinds
+  - DataKinds
+  - DefaultSignatures
+  - DeriveFunctor
+  - DeriveGeneric
+  - DeriveLift
+  - DerivingStrategies
+  - DerivingVia
+  - FlexibleContexts
+  - FlexibleInstances
+  - FunctionalDependencies
+  - GADTs
+  - GeneralisedNewtypeDeriving
+  - LambdaCase
+  - MultiParamTypeClasses
+  - MultiWayIf
+  - NumericUnderscores
+  - OverloadedLabels
+  - OverloadedStrings
+  - PatternSynonyms
+  - PolyKinds
+  - QuantifiedConstraints
+  - QuasiQuotes
+  - RankNTypes
+  - RecordWildCards
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - TupleSections
+  - TypeApplications
+  - TypeFamilies
+  - TypeFamilyDependencies
+  - TypeOperators
+  - UndecidableInstances
+  - ViewPatterns
+
+ghc-options:
+    - -Wall
+    - -Werror=incomplete-patterns
+    - -Werror=incomplete-uni-patterns
+    - -Werror=incomplete-record-updates
+
+library:
+  dependencies:
+  - aeson
+  - asn1-encoding
+  - async
+  - base64-bytestring >= 1.1
+  - cryptonite
+  - data-default
+  - lens
+  - memory
+  - mtl
+  source-dirs: src
+
+tests:
+  tests:
+    dependencies:
+    - signed-authorization
+    - tasty
+    - tasty-hspec
+    - hspec-hedgehog
+    - hedgehog
+    - typed-process
+    - unliftio
+    - base64-bytestring >= 1.1
+    ghc-options:
+    - -rtsopts
+    - -threaded
+    - -with-rtsopts=-N
+    main: Main.hs
+    source-dirs: test-suite

@@ -25,7 +25,7 @@ FROM baseimage
 
 EXPOSE 80
 
-ADD dist/auth-service /app/auth-service
+COPY dist/auth-service /app/auth-service
 
-CMD auth-service run
+CMD ["auth-service", "run"]
 HEALTHCHECK CMD curl --fail "http://localhost/status"

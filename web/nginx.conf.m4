@@ -17,6 +17,8 @@ worker_processes 1;
 
 ifdef(`ERROR_LOG', `error_log ERROR_LOG warn;')
 
+error_log /dev/stderr debug;
+
 events {
     worker_connections 1024;
 }
@@ -55,18 +57,12 @@ http {
         resolver 127.0.0.11;
         location / {
             auth_request /auth;
-            auth_request_set $user $upstream_http_x_user_id;
-            auth_request_set $useremail $upstream_http_x_user_email;
-            auth_request_set $username $upstream_http_x_user_name;
-            auth_request_set $roles $upstream_http_x_roles;
-            # The variable $user now contains the user ID when the check was
-            # successful.
-            proxy_pass http://$http_x_instance;
-            proxy_set_header X-User-ID $user;
-            proxy_set_header X-User-Email $useremail;
-            proxy_set_header X-User-Name $username;
-            proxy_set_header X-Roles $roles;
+            auth_request_set $auth $upstream_http_x_auth;
+            # The variable $auth now contains the the signed authentication info
+            proxy_set_header X-AUTH $auth;
             proxy_set_header X-Original-URI $request_uri;
+
+            proxy_pass http://$http_x_instance;
 
             # [1] Set the "Upgrade" and "Connection" headers when we receive
             # them We have to manually pass them through because those headers

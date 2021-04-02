@@ -24,13 +24,12 @@ import qualified Data.Text               as Text
 import           Database.Persist.Sql    (ConnectionPool)
 import qualified Prelude
 import           Prelude                 hiding (id)
-import qualified Test.QuickCheck.Monadic as QC
-import qualified Text.Microstache        as Mustache
-
 import           Test.Hspec.Expectations
+import qualified Test.QuickCheck.Monadic as QC
 import           Test.Tasty              (defaultMain, testGroup, TestTree)
 import           Test.Tasty.HUnit        hiding (assertFailure)
 import           Test.Tasty.QuickCheck
+import qualified Text.Microstache        as Mustache
 
 import           Backend
 import           Config                  (defaultPwResetTemplate)
@@ -52,6 +51,10 @@ assertFailure :: Ex.MonadThrow m => String -> m a
 assertFailure = Ex.throwM  . AssertionFailed
 
 type Case a = ConnectionPool -> IO a
+
+loginDefaults :: Login -> API (Either LoginError ReturnLogin)
+-- 100 attempts every 1 second, empty remote address
+loginDefaults = login 1 "" 100
 
 --------------------------------------------------------------------------------
 -- Add User
@@ -107,16 +110,16 @@ loginOTP ::
   -> AddUser
   -> IO B64Token
 loginOTP run getOtp AddUser{..} = do
-    res <- run $ login Login { loginUser = addUserEmail
+    res <- run $ loginDefaults Login { loginUser = addUserEmail
                              , loginPassword = addUserPassword
                              , loginOtp = Nothing
                              }
     res `shouldBe` Left LoginErrorOTPRequired
     Just otp <- getOtp
-    res' <- run $ login Login { loginUser = addUserEmail
-                              , loginPassword = addUserPassword
-                              , loginOtp = Just $ Password otp
-                              }
+    res' <- run $ loginDefaults Login { loginUser = addUserEmail
+                                      , loginPassword = addUserPassword
+                                      , loginOtp = Just $ Password otp
+                                      }
     case res' of
       Left e -> assertFailure $ "Failed login with OTP " <> show e
       Right r -> return $ returnLoginToken r
@@ -275,7 +278,9 @@ case_password_reset_render_error_email _pool = do
 -- during render
 case_password_reset_render_email_errors :: Case ()
 case_password_reset_render_email_errors _pool = do
-  let Right tmpl = Mustache.compileMustacheText "test" "{{bogus}}"
+  let tmpl = case Mustache.compileMustacheText "test" "{{bogus}}" of
+               Right t -> t
+               Left e -> error $ show e
   runNoLoggingT (renderEmail testEmailConfig tmpl Nothing)
     `shouldThrow` (== EmailRenderError)
 
@@ -332,7 +337,7 @@ runLogin :: (forall a . API a -> IO a)
          -> AddUser
          -> IO ReturnLogin
 runLogin run usr = do
-  res <- run $ login Login{ loginUser = usr ^. email
+  res <- run $ loginDefaults Login{ loginUser = usr ^. email
                           , loginPassword = usr ^. password
                           , loginOtp = Nothing
                           }
@@ -347,13 +352,13 @@ case_login = withUser testUser $ \_uid run -> do
 
 case_login_otp :: Case ()
 case_login_otp =  withUserOTP testUserOtp $ \_uid getOtp run -> do
-    res <- run $ login Login { loginUser = testUserOtp ^. email
+    res <- run $ loginDefaults Login { loginUser = testUserOtp ^. email
                              , loginPassword = testUserOtp ^. password
                              , loginOtp = Nothing
                              }
     res `shouldBe` Left LoginErrorOTPRequired
     Just otp <- getOtp
-    res' <- run $ login Login { loginUser = testUserOtp ^. email
+    res' <- run $ loginDefaults Login { loginUser = testUserOtp ^. email
                               , loginPassword = testUserOtp ^. password
                               , loginOtp = Just $ Password otp
                               }
@@ -367,14 +372,14 @@ case_login_otp_wrong_user =
     _ <- run . createUser $ testUserOtp & email .~ "user2@spam.please"
 
     -- First, log in alternative user and get OTP
-    res <- run $ login Login { loginUser = "user2@spam.please"
+    res <- run $ loginDefaults Login { loginUser = "user2@spam.please"
                              , loginPassword = testUserOtp ^. password
                              , loginOtp = Nothing
                              }
     res `shouldBe` Left LoginErrorOTPRequired
     Just otpUser2 <- getOtp
     -- Now log in test user, ignore OTP
-    res <- run $ login Login { loginUser = testUserOtp ^. email
+    res <- run $ loginDefaults Login { loginUser = testUserOtp ^. email
                              , loginPassword = testUserOtp ^. password
                              , loginOtp = Nothing
                              }
@@ -382,7 +387,7 @@ case_login_otp_wrong_user =
 
 
     -- Finally, try to log in test user with alternative user's OTP
-    res' <- run $ login Login { loginUser = testUserOtp ^. email
+    res' <- run $ loginDefaults Login { loginUser = testUserOtp ^. email
                               , loginPassword = testUserOtp ^. password
                               , loginOtp = Just $ Password otpUser2
                               }

@@ -1,14 +1,15 @@
-{-# LANGUAGE LambdaCase #-}
 -- Copyright (c) 2015 Lambdatrade AB
 -- All rights reserved
 
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Api where
 
@@ -21,10 +22,14 @@ import qualified Data.List            as List
 import           Data.Maybe           (fromMaybe, maybeToList)
 import           Data.Text            (Text)
 import qualified Data.Text            as Text
+import qualified Data.Text.Encoding   as Text
+import qualified Data.Text.IO         as Text
 import           Database.Persist.Sql
 import qualified NejlaCommon          as NC
 import           Network.Wai
 import           Servant
+import qualified SignedAuth
+import           System.IO
 import           Types
 
 import           Logging              hiding (token)
@@ -34,6 +39,7 @@ import qualified Persist.Schema       as DB
 import           Audit
 import           AuthService.Api
 import           Monad
+import           SignedAuth.Headers   (JWS(..))
 
 --------------------------------------------------------------------------------
 -- Api -------------------------------------------------------------------------
@@ -55,7 +61,7 @@ liftHandler =
                  }
 
 
-type StatusApi = "status" :> GetNoContent '[JSON] NoContent
+type StatusApi = "status" :> GetNoContent
 
 serveStatus :: Server StatusApi
 serveStatus = return NoContent
@@ -63,10 +69,14 @@ serveStatus = return NoContent
 
 -- Will be transformed into X-Token header and token cookie by the nginx
 serveLogin :: ConnectionPool -> ApiState -> Server LoginAPI
-serveLogin pool conf loginReq = loginHandler
+serveLogin pool st loginReq = loginHandler
   where
     loginHandler = do
-        mbReturnLogin <- liftHandler . runAPI pool conf $ login loginReq
+        let conf = apiStateConfig st
+            timeframe = configAttemptsTimeframe conf
+            maxAttempts = fromInteger $ configMaxAttempts conf
+        mbReturnLogin <- liftHandler . runAPI pool st
+                           $ login timeframe "" maxAttempts loginReq
         case mbReturnLogin of
          Right rl -> return (addHeader (returnLoginToken rl) rl)
          Left LoginErrorOTPRequired ->
@@ -76,10 +86,18 @@ serveLogin pool conf loginReq = loginHandler
                                      "{\"error\":\"One time password required\"}"
                                    , errHeaders = [("Content-Type", "application/json")]
                                    }
-         Left _e -> throwError err403{ errBody = "{\"error\": \"Credentials not accepted\"}"
+         Left LoginErrorFailed -> throwError err403{ errBody = "{\"error\": \"Credentials not accepted\"}"
                                      , errHeaders = [("Content-Type", "application/json")]
                                      }
-
+         Left LoginErrorRatelimit -> throwError err429{ errBody = "{\"error\": \"Too many attempts\"}"
+                                                      , errHeaders = [("Content-Type", "application/json")]
+                                                      }
+         Left LoginErrorTwilioNotConfigured -> throwError err500
+    err429 = ServerError { errHTTPCode     = 429
+                         , errReasonPhrase = "Too Many Requests"
+                         , errBody         = ""
+                         , errHeaders      = []
+                         }
 
 serveLogout :: ConnectionPool -> ApiState -> Server LogoutAPI
 serveLogout pool conf tok = logoutHandler >> return NoContent
@@ -105,12 +123,16 @@ serveChangePassword pool conf tok chpass = chPassHandler >> return NoContent
        Left ChangePasswordTokenError{} -> throwError err403
        Left ChangePasswordUserDoesNotExistError{} -> throwError err403
 
-serveCheckToken :: ConnectionPool -> ApiState -> Server CheckTokenAPI
-serveCheckToken pool conf req (Just tok) (Just inst) = checkTokenHandler
+instance ToHttpApiData (JWS a) where
+  toUrlPiece (JWS bs) = Text.decodeUtf8 bs
+  toHeader (JWS bs) = bs
+
+serveCheckToken :: ConnectionPool -> ApiState -> Secrets -> Server CheckTokenAPI
+serveCheckToken pool st secrets req (Just tok) (Just inst) = checkTokenHandler
   where
     checkTokenHandler = do
       res <-
-        liftHandler . runAPI pool conf $ do
+        liftHandler . runAPI pool st $ do
           logDebug $
             "Checking token " <> showText tok <> " for instance " <>
             showText inst
@@ -121,14 +143,22 @@ serveCheckToken pool conf req (Just tok) (Just inst) = checkTokenHandler
       case res of
         Nothing -> throwError err403
         Just (usr, userEmail, userName, roles') -> do
-          return . addHeader usr
-                 . addHeader userEmail
-                 . addHeader userName
-                 . addHeader (Roles roles')
+          let authHeader = AuthHeader
+                           { authHeaderUserID = usr
+                           , authHeaderEmail = userEmail
+                           , authHeaderName = userName
+                           , authHeaderRoles = roles'
+                           }
+          signedAuthHeader <- liftIO $ SignedAuth.encodeHeaders
+                                   (secrets ^. headerPrivateKey)
+                                   (st ^. noncePool)
+                                   authHeader
+
+          return . addHeader signedAuthHeader
                  $ ReturnUser { returnUserUser = usr
                               , returnUserRoles = roles'
                               }
-serveCheckToken _ _ _ _ _ = throwError err400
+serveCheckToken _ _ _ _ _ _ = throwError err400
 
 servePublicCheckToken :: ConnectionPool -> ApiState -> Server PublicCheckTokenAPI
 servePublicCheckToken pool conf tok = checkTokenHandler
@@ -163,10 +193,10 @@ serveGetUserInfoAPI pool conf tok =  do
 
 isAdmin :: Text -> ConnectionPool -> ApiState -> Maybe B64Token -> Handler IsAdmin
 isAdmin _ _ _ Nothing = throwError err403
-isAdmin request pool conf (Just token) = do
+isAdmin request pool conf (Just token) =
   liftHandler (runAPI pool conf $ checkAdmin request token) >>= \case
-    Nothing -> throwError err403
-    Just isAdmin -> return isAdmin
+  Nothing -> throwError err403
+  Just isAdmin -> return isAdmin
 
 serveCreateUserAPI :: ConnectionPool
                    -> ApiState
@@ -175,14 +205,13 @@ serveCreateUserAPI :: ConnectionPool
 serveCreateUserAPI pool conf tok addUser = do
   _ <- isAdmin desc pool conf tok
   res <- liftHandler . runAPI pool conf $ do
-    mbRes <- createUser addUser
-    return mbRes
+    createUser addUser
   case res of
     Nothing -> throwError err500
-    Just uid -> do
+    Just uid ->
       return $ ReturnUser{ returnUserUser = uid
-                         , returnUserRoles = addUser ^. roles
-                         }
+                       , returnUserRoles = addUser ^. roles
+                       }
   where
     desc = "create user " <> Text.pack (show addUser)
 
@@ -192,7 +221,7 @@ serveGetUsersAPI :: ConnectionPool
                  -> Server GetUsersAPI
 serveGetUsersAPI pool conf tok = do
   _ <- isAdmin desc pool conf tok
-  liftHandler $ runAPI pool conf $ getUsers
+  liftHandler $ runAPI pool conf getUsers
   where
     desc = "get users"
 
@@ -241,11 +270,11 @@ apiPrx = Proxy
 
 serveRequestPasswordResetAPI ::
      ConnectionPool -> ApiState -> Server RequestPasswordResetAPI
-serveRequestPasswordResetAPI pool conf req = do
-  case (conf ^. config . email) of
+serveRequestPasswordResetAPI pool conf req =
+  case conf ^. config . email of
     Nothing -> do
-      liftHandler . runAPI pool conf $ logError $ "Password reset: email not configured"
-      throwError $ err404
+      liftHandler . runAPI pool conf $ logError "Password reset: email not configured"
+      throwError err404
     Just _emailCfg -> do
       res <- Ex.try . liftHandler . runAPI pool conf $
                passwordResetRequest (req ^. email)
@@ -282,34 +311,38 @@ servePasswordResetTokenInfo pool conf (Just token) = do
 
 serveCreateAccountApi :: ConnectionPool -> ApiState -> Server CreateAccountAPI
 serveCreateAccountApi pool conf xinstance createAccount =
-  case (accountCreationConfigEnabled
-          . configAccountCreation $ apiStateConfig  conf) of
-    False -> throwError err403
-    True -> liftHandler . runAPI pool conf $ do
-      dis <- getConfig (accountCreation . defaultInstances)
-      _ <-
-        createUser
-          AddUser
-          { addUserUuid = Nothing
-          , addUserEmail = createAccountEmail createAccount
-          , addUserPassword = createAccountPassword createAccount
-          , addUserName = createAccountName createAccount
-          , addUserPhone = createAccountPhone createAccount
-          , addUserInstances = (List.nub $ maybeToList xinstance ++ dis)
-          , addUserRoles = []
-          }
-      return NoContent
+  if accountCreationConfigEnabled
+          . configAccountCreation $ apiStateConfig  conf then liftHandler . runAPI pool conf $ do
+    dis <- getConfig (accountCreation . defaultInstances)
+    _ <-
+      createUser
+        AddUser
+        { addUserUuid = Nothing
+        , addUserEmail = createAccountEmail createAccount
+        , addUserPassword = createAccountPassword createAccount
+        , addUserName = createAccountName createAccount
+        , addUserPhone = createAccountPhone createAccount
+        , addUserInstances = List.nub $ maybeToList xinstance ++ dis
+        , addUserRoles = []
+        }
+    return NoContent else throwError err403
 
 
-serveAPI :: ConnectionPool -> Config -> Application
-serveAPI pool conf =
+serveAPI ::
+     ConnectionPool
+  -> SignedAuth.NoncePool
+  -> Config
+  -> Secrets
+  -> Application
+serveAPI pool noncePool conf secrets =
   Audit.withAuditHttp $ \auditHttp ->
     let ctx = ApiState { apiStateConfig = conf
                        , apiStateAuditSource = auditHttp
+                       , apiStateNoncePool = noncePool
                        }
     in serve apiPrx $ serveStatus
                                :<|> serveLogin pool ctx
-                               :<|> serveCheckToken pool ctx
+                               :<|> serveCheckToken pool ctx secrets
                                :<|> servePublicCheckToken pool ctx
                                :<|> serveLogout pool ctx
                                :<|> serverDisableSessions pool ctx

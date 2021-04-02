@@ -13,3 +13,5 @@ tags
 **/.stack-work
 service/*.cabal
 **/stack.yaml.lock
+auth-web.image
+service/baseimage

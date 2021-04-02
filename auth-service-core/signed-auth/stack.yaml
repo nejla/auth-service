@@ -1,0 +1,17 @@
+resolver: lts-16.24
+
+packages:
+  - .
+
+extra-deps:
+  - base64-bytestring-1.2.0.1
+
+docker:
+  enable: false
+  image: nejla/haskell-build
+
+nix:
+  packages:
+    - zlib
+    - postgresql
+    - openssl

@@ -2,32 +2,42 @@
 
 module Dev where
 
-import Control.Monad.Logger
-import Control.Monad.Trans
-import Database.Persist.Postgresql
-import Types
-import Monad
-import Audit (AuditSource(AuditSourceManual))
+import           Control.Monad.Logger
+import           Control.Monad.Trans
+import           Database.Persist.Postgresql
+import           Types
+import           Monad
+import           Audit                       (AuditSource(AuditSourceManual))
 
-devConf :: ApiState
-devConf = ApiState
-  { apiStateConfig = Config
-    { configTimeout              = Nothing
-    , configOTPLength            = 1
-    , configOTPTimeoutSeconds    = 3600
-    , configTFARequired          = False
-    , configOtp                  = Nothing
-    , configUseTransactionLevels = False
-    , configEmail                = Nothing
-    , configAccountCreation      = AccountCreationConfig
-      { accountCreationConfigEnabled = True
-      , accountCreationConfigDefaultInstances = []
+import qualified SignedAuth.Sign             as Sign
+import qualified SignedAuth
+
+mkDevConf :: IO ApiState
+mkDevConf = do
+  (privKey, _) <- Sign.mkKeys
+  noncePool <- SignedAuth.newNoncePool
+  return ApiState
+    { apiStateConfig = Config
+      { configTimeout              = Nothing
+      , configMaxAttempts          = 5
+      , configAttemptsTimeframe    = 60
+      , configOTPLength            = 1
+      , configOTPTimeoutSeconds    = 3600
+      , configTFARequired          = False
+      , configOtp                  = Nothing
+      , configUseTransactionLevels = False
+      , configEmail                = Nothing
+      , configAccountCreation      = AccountCreationConfig
+        { accountCreationConfigEnabled = True
+        , accountCreationConfigDefaultInstances = []
+        }
       }
-    }
-  , apiStateAuditSource = AuditSourceManual
+    , apiStateAuditSource = AuditSourceManual
+    , apiStateNoncePool = noncePool
   }
 
 
 runApiDev :: ConnectionString -> API a -> IO a
 runApiDev cstr m = runStderrLoggingT $withPostgresqlPool cstr 3 $ \pool -> do
+  devConf <- liftIO mkDevConf
   liftIO $ runAPI pool devConf m
