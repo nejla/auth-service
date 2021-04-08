@@ -1,0 +1,11 @@
+# stack.yaml for use by dockerhub
+
+resolver: lts-17.9
+
+extra-deps:
+  - git: https://github.com/nejla/nejla-common.git
+    commit: b6d0eda44396526ac2a5308a41f282b163c1abda
+  - '../auth-service-core'
+  - base64-bytestring-1.2.0.1
+
+allow-newer: true
