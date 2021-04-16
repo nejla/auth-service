@@ -1,6 +1,3 @@
--- Copyright 2015 Lambdatrade AB
--- All rights reserved
-
 module Helpers where
 
 import           Control.Monad.Trans

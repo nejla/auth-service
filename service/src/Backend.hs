@@ -1,6 +1,3 @@
--- Copyright (c) 2015-2018 Lambdatrade AB
--- All rights reserved
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}

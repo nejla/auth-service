@@ -1,6 +1,3 @@
--- Copyright (c) 2015-2021 Lambdatrade AB
--- All Rights Reserved
-
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}

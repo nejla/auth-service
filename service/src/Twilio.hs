@@ -1,6 +1,3 @@
--- Copyright (c) 2015 Lambdatrade AB
--- All rights reserved
-
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}

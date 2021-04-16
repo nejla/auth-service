@@ -2,7 +2,9 @@ name: auth-service
 version: '0.0.0'
 synopsis: Auth service
 description: Auth service
-copyright: '2015'
+copyright:
+  - Nejla AB
+  - '2014-2021'
 license: AllRightsReserved
 extra-source-files:
 - src/schema

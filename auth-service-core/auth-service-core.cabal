@@ -9,7 +9,7 @@ license:             AllRightsReserved
 license-file:        LICENSE
 author:              Nejla AB
 maintainer:          jon@nejla.com
--- copyright:
+copyright:           Copyright © 2015-2021, Nejla AB
 -- category:
 build-type:          Simple
 extra-source-files:  ChangeLog.md

@@ -1,6 +1,3 @@
--- Copyright (c) 2015 Lambdatrade AB
--- All rights reserved
-
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}

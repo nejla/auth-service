@@ -1,6 +1,3 @@
--- Copyright (c) 2015 Lambdatrade AB
--- All rights reserved
-
 -- | Import this module qualified like this:
 --
 -- >>> import qualified Logging as Log

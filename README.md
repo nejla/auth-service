@@ -388,7 +388,7 @@ POST /api/disable-sessions
 Legal
 -----
 
-Copyright © 2015-2017 Nejla AB. All rights reserved.
+Copyright © 2015-2021 Nejla AB. All rights reserved.
 
 Twilio and Twiml are registered trademarks of Twilio and/or its affiliates.
 Other names may be trademarks of their respective owners.
