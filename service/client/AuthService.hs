@@ -76,9 +76,9 @@ call' meth site urlPath v = do
     case mbResponse of
      Left (e :: HttpException) -> Ex.throwM $ AuthServiceHttpException e
      Right response ->
-         case statusIsSuccessful $ responseStatus response of
-          True -> return . Right $ responseBody response
-          False -> return $ Left response
+         if statusIsSuccessful $ responseStatus response
+           then return . Right $ responseBody response
+           else return $ Left response
 
 call :: ToJSON a =>
         ByteString

@@ -21,7 +21,7 @@ import           System.Environment
 import           System.Exit
 import           System.IO
 
-import           NejlaCommon                 (withPool, runPoolRetry)
+import           NejlaCommon                 ( withDBPool, getDBConnectInfo )
 
 import           Api
 import           Audit
@@ -54,7 +54,6 @@ logMiddleware app req respond = app req respond'
       Net.hostAddressToTuple haddr == (127,0,0,1)
     isLocal (Net.SockAddrInet6 _port _flow haddr6 _scope) =
       haddr6 == (0, 0, 0, 1)
-    isLocal _ = False
 
 runMain :: IO ()
 runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn)
@@ -65,8 +64,8 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
     let logM = case mbLogging of
                 Just "true" -> logMiddleware
                 _ -> Prelude.id
-
-    withPool confFile 5 $ \pool -> do
+    conInfo <- getDBConnectInfo confFile
+    withDBPool conInfo 5 doMigrate $ \pool -> do
         args <- liftIO getArgs
         noncePool <- liftIO SignedAuth.newNoncePool
         -- AppState for CLI invocations
@@ -79,7 +78,6 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
                                 }
         let run :: forall a m. MonadIO m => API a -> m a
             run = liftIO . runAPI pool appState
-        _ <- runPoolRetry pool doMigrate
         case args of
          ("adduser": args') -> do
              res <- run $ addUser (args' ^.. each . packed)

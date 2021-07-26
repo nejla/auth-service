@@ -11,7 +11,6 @@ import           Control.Lens
 import           Control.Monad.Reader
 import           Data.Default         (def)
 import           Database.Persist.Sql
-import           Language.Haskell.TH
 import qualified NejlaCommon          as NC
 
 import           Types

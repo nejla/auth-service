@@ -6,7 +6,6 @@ module User where
 import qualified Control.Monad.Catch      as Ex
 import           Control.Monad.Trans
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Text                (Text)
 import qualified Data.Text                as Text
 import           Data.Time                (UTCTime)
@@ -85,7 +84,7 @@ addInstance' args = do
       uuid <- parseUUID uuidTxt
       addInstance (Just $ InstanceID uuid) name >>= liftIO . print
     _ -> liftIO $ do
-      hPutStrLn stderr $ "Usage: auth-service newinstance <name> [<uuid>]"
+      hPutStrLn stderr "Usage: auth-service newinstance <name> [<uuid>]"
       exitFailure
 
 userAddInstance :: [String] -> API ()
@@ -110,7 +109,7 @@ userRemoveInstance args = do
         then return ()
         else liftIO $ do
                hPutStrLn stderr $
-                 "User did not have access to instance " <> (Text.unpack inst)
+                 "User did not have access to instance " <> Text.unpack inst
                exitFailure
     _ -> liftIO $ do
       hPutStrLn stderr "Usage: auth-service removeinstance <email> <uuid>"

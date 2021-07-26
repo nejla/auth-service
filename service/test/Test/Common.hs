@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE QuasiQuotes #-}
 
 module Test.Common where
 
@@ -49,7 +48,7 @@ testEmailConfig =
       }
   , emailConfigSiteName = "Test Site"
   , emailConfigResetLinkExpirationTime = 24
-  , emailConfigMkLink = \tok -> "http://localhost/reset?token=" <> tok
+  , emailConfigMkLink = ("http://localhost/reset?token=" <>)
   }
   where
     tmpl x = case Mustache.compileMustacheText "email template" x of
@@ -80,6 +79,7 @@ mkConfig pool = do
     let conf =
           Config
           { configTimeout = Nothing
+          , configTokenUnusedTimeout = Nothing
           , configMaxAttempts = 10000
           , configAttemptsTimeframe  =1
           , configOTPLength = 6

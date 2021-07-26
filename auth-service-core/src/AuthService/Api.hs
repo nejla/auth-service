@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -6,7 +5,6 @@ module AuthService.Api where
 
 import           AuthService.Types
 import           Data.Text         (Text)
-import qualified Data.Text         as Text
 import           Servant.API       hiding (PostNoContent)
 
 import           SignedAuth

@@ -10,7 +10,6 @@ import           Control.Monad.Trans
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Lazy   as BSL
-import           Data.Monoid
 import           Data.Text              (Text)
 import qualified Data.Text              as Text
 import qualified Data.Text.Encoding     as Text
@@ -58,9 +57,9 @@ sendMessage TwilioConfig{ twilioConfigAccount = account'
       Left (e :: HttpException) -> do
           logError $ "Error while connection to Twilio: " <> showText e
           return ()
-      Right response -> case statusIsSuccessful $ responseStatus response of
-                True -> return  ()
-                False -> do
+      Right response -> if statusIsSuccessful $ responseStatus response
+                then return  ()
+                else do
                   logError $ "Twilio returned error response "
                                 <> showText (responseStatus response)
                                 <> "; " <> (Text.decodeUtf8 . BSL.toStrict $
@@ -71,4 +70,4 @@ sendMessage TwilioConfig{ twilioConfigAccount = account'
     showText :: Show a => a -> Text
     showText = Text.pack . show
     mkAuth username password'  =
-        ("Authorization", "Basic " <> (B64.encode $ username <> ":" <> password'))
+        ("Authorization", "Basic " <> B64.encode (username <> ":" <> password'))

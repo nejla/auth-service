@@ -66,7 +66,7 @@ import qualified Network.HTTP.Types              as HTTP
 import           Network.Wai                     (requestHeaders, Request)
 import qualified Network.Wai                     as Wai
 import           Servant                         hiding (Required, Optional)
-import           Servant.Server.Internal         (delayedFailFatal, DelayedIO, withRequest, addAuthCheck)
+import           Servant.Server.Internal         (delayedFailFatal, addAuthCheck)
 
 import qualified SignedAuth.Headers              as Headers
 import qualified SignedAuth.Nonce                as Nonce
@@ -84,7 +84,7 @@ data AuthContext =
   AuthContext
   { authContextPubKey ::  Sign.PublicKey
   , authContextNonceFrame :: Nonce.Frame
-  , authContextLogger :: (Loc -> LogSource -> LogLevel -> LogStr -> IO ())
+  , authContextLogger :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
   }
 
 makeLensesWith camelCaseFields ''AuthContext
@@ -94,8 +94,7 @@ makeLensesWith camelCaseFields ''AuthContext
 mkAuthContext :: MonadLoggerIO m => Sign.PublicKey -> m AuthContext
 mkAuthContext pubKey = do
   frame <- liftIO Nonce.newFrame
-  logfun <- askLoggerIO
-  return $ AuthContext pubKey frame logfun
+  AuthContext pubKey frame <$> askLoggerIO
 
 --------------------------------------------------------------------------------
 -- Request handling ------------------------------------------------------------

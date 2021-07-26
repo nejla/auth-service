@@ -17,7 +17,7 @@ import qualified Control.Monad.Catch             as Ex
 import           Control.Monad.Except
 import qualified Crypto.BCrypt                   as BCrypt
 import           Data.ByteString.Base64          as B64
-import           Data.Maybe                      (listToMaybe)
+import           Data.Maybe                      (listToMaybe, catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as Text
 import qualified Data.Text.Encoding              as Text
@@ -35,11 +35,15 @@ import           NejlaCommon                     as NC
 import qualified Logging                         as Log
 import qualified Persist.Schema                  as DB
 import           Types
-import           Database.Esqueleto.Internal.Sql (unsafeSqlBinOp)
+import           Database.Esqueleto.Internal.Internal (unsafeSqlBinOp)
 
 import           Audit
 import           Monad
 import Control.Monad.Logger (LoggingT(runLoggingT))
+
+orLMb :: [Maybe (SqlExpr (Value Bool))]
+       -> SqlExpr (Value Bool)
+orLMb = orL . catMaybes
 
 unOtpKey :: Key DB.UserOtp -> Log.OtpRef
 unOtpKey = P.unSqlBackendKey . DB.unUserOtpKey
@@ -358,10 +362,17 @@ deactivateOtpWhere selector = do
   now <- liftIO getCurrentTime
   runDB $ P.updateWhere selector [DB.UserOtpDeactivated P.=. Just now]
 
-deactivateTokenWhere :: [P.Filter DB.Token] -> API ()
+deactivateTokenWhere ::
+     (SV DB.Token -> SqlExpr (Value Bool))
+  -> API Int
 deactivateTokenWhere selector = do
   now <- liftIO getCurrentTime
-  runDB $ P.updateWhere selector [DB.TokenDeactivated P.=. Just now]
+  fmap fromIntegral $ runDB $ updateCount $ \(tok :: SV DB.Token) -> do
+    E.set tok [DB.TokenDeactivated E.=. val (Just now)]
+    whereL [ selector tok
+           -- This is necessary to give accurate counts
+           , isNothing $ tok E.^. DB.TokenDeactivated
+           ]
 
 -- | Create and send one time password for a user
 createOTP :: OtpHandler -> Phone -> Email -> UserID -> API ()
@@ -518,6 +529,9 @@ login timeframe remoteAddress maxAttempts
         Right r -> return r
     createToken userId = lift $ do
       now <- liftIO getCurrentTime
+      -- We set the absolute expiration time for the token here, but the
+      -- expiration timeout for tokens that haven't been used in a while is
+      -- re-calculated on each check
       mbTokenExpiration <- getConfig timeout
       let tokenExpires = mbTokenExpiration <&> \texp ->
             -- fromInteger on NominalDiffTime assumes seconds
@@ -578,12 +592,24 @@ changePassword tok ChangePassword { changePasswordOldPasword = oldPwd
       throwError e
     Right{} -> return ()
 
-
 getUserByToken :: B64Token -> API (Maybe (Log.TokenRef, DB.User))
 getUserByToken tokenId = do
   -- Delete expired tokens
   now <- liftIO getCurrentTime
-  deactivateTokenWhere [DB.TokenExpires P.<=. Just now]
+  mbTokenUnusedExpiration <- getConfig tokenUnusedTimeout
+  let mbExpiresUnused = mbTokenUnusedExpiration <&> \tuexp ->
+        addUTCTime (negate $ fromInteger tuexp) now
+  deactivateTokenWhere $ \tok ->
+    orLMb
+    [ Just (tok E.^. DB.TokenExpires E.<=. val (Just now))
+    -- Expire token when it was last used before `now - $TOKEN_UNUSED_TIMEOUT`
+    , mbExpiresUnused <&> \expiresUnused ->
+        -- If the token was never used, treat the creation as the first use
+        coalesceDefault [tok E.^. DB.TokenLastUse]
+          (tok E.^. DB.TokenCreated)
+        -- now - $TOKEN_UNUSED_TIMEOUT
+        E.<=. val expiresUnused
+    ]
 
   user' <- runDB . select . E.from $ \(user' `InnerJoin` token') -> do
     on (user' E.^. DB.UserUuid ==. token' E.^. DB.TokenUser)
@@ -668,15 +694,14 @@ checkAdmin request tok = do
       return Nothing
     Just usr -> do
       roles' <- getUserRoles (usr ^. _2 . uuid)
-      case "admin" `elem` roles' of
-        False -> do
+      if "admin" `elem` roles'
+        then return $ Just IsAdmin -- @TODO
+        else do
           Log.logES Log.AdminRequestNotAdmin
                    { Log.request = request
                    , Log.token = unB64Token tok
                    }
           return Nothing
-        True -> return $ Just IsAdmin -- @TODO
-
 
 checkToken :: B64Token -> API (Maybe UserID)
 checkToken tokenId = fmap (DB.userUuid . snd) <$> getUserByToken tokenId
@@ -694,22 +719,21 @@ logOut token' = do
                                               , Log.tokenId = tid
                                               }
       _ -> return ()
-    deactivateTokenWhere [DB.TokenToken P.==. token']
+    _ <- deactivateTokenWhere (\tok -> tok E.^. DB.TokenToken E.==. val token')
     audit AuditTokenDeactivated { auditToken = unB64Token token'}
 -- addUser name password email mbPhone = do
 
 closeOtherSessions :: B64Token -> API ()
 closeOtherSessions tokenID = do
-  cnt <- runDB $ E.deleteCount . E.from $ \tok -> do
-    whereL [ E.exists . E.from $ \token' ->
-              whereL [ tok E.^. DB.TokenUser E.==. token' E.^. DB.TokenUser
-                     , token' E.^. DB.TokenToken E.==. E.val tokenID
-                     ]
-           , tok E.^. DB.TokenToken E.!=. E.val tokenID
-           ]
-  case cnt > 0 of
-    True -> audit AuditOtherTokensDeactivated { auditToken = unB64Token tokenID}
-    False -> return ()
+  cnt <- deactivateTokenWhere $ \tok -> do
+    andL [ E.exists . E.from $ \token' ->
+            whereL [ tok E.^. DB.TokenUser E.==. token' E.^. DB.TokenUser
+                   , token' E.^. DB.TokenToken E.==. E.val tokenID
+                   ]
+         , tok E.^. DB.TokenToken E.!=. E.val tokenID
+         ]
+  when (cnt > 0) $
+    audit AuditOtherTokensDeactivated { auditToken = unB64Token tokenID }
 
 --------------------------------------------------------------------------------
 -- Admin endpoints -------------------------------------------------------------

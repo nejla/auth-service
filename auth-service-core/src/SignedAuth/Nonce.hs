@@ -1,32 +1,24 @@
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE StrictData #-}
 
 module SignedAuth.Nonce where
 
 import           Data.Bits
-import           Data.ByteString       (ByteString)
-import qualified Data.ByteString       as BS
-import qualified Data.Foldable         as Foldable
 import           Data.IORef
-import           Data.Map.Strict       (Map)
-import qualified Data.Map.Strict       as Map
 import           Data.Set              (Set)
 import qualified Data.Set              as Set
 import           Data.Time.Clock
 import           Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import           Data.Word
 
-import           SignedAuth.Sign
-
 -- How far back we keep nonces
-nonce_store_timeout :: NominalDiffTime
-nonce_store_timeout = 5 --seconds
+nonceStoreTimeout :: NominalDiffTime
+nonceStoreTimeout = 5 -- seconds
 
--- Nonces older than this are rejected. Has to be < nonce_store_timeout or we
--- can accept nonces that we already "forgot" about. Difference between the two
--- is the grace period we have for handling the nonce check.
-nonce_reject_timeout :: NominalDiffTime
-nonce_reject_timeout = 4 -- second
+-- Nonces older than this are rejected. Has to be < nonceStoreTimeout or we can
+-- accept nonces that we already "forgot" about. Difference between the two is
+-- the grace period we have for handling the nonce check.
+nonceRejectTimeout :: NominalDiffTime
+nonceRejectTimeout = 4 -- seconds
 
 type Nonce = Word64
 
@@ -70,7 +62,7 @@ data NonceFrame =
 
 mkFrame :: POSIXTime -> NonceFrame
 mkFrame now = NonceFrame { nfOldNonces = mempty
-                         , nfSplit = now + nonce_reject_timeout
+                         , nfSplit = now + nonceRejectTimeout
                          -- Reject any nonce that was generated before we started
                          -- to avoid replays after a restart
                          , nfCurrentNonces = mempty
@@ -94,11 +86,11 @@ updateCheckNonceFrame
   -> (NonceFrame, Verdict)
 updateCheckNonceFrame timestamp nonce frames0@(NonceFrame old0 split0 current0)
   -- Nonce timestamp is older than our record
-  | timestamp < split0 - nonce_reject_timeout = (frames0, RejectOld)
+  | timestamp < split0 - nonceRejectTimeout = (frames0, RejectOld)
   -- Nonce is in seen set
   | Set.member nonce old0 || Set.member nonce current0 = (frames0, RejectSeen)
   | otherwise =
-      let cutoff = timestamp - nonce_store_timeout
+      let cutoff = timestamp - nonceStoreTimeout
       -- Cycle frames if necessary
           (NonceFrame old1 split1 current1) =
             if split0 < cutoff

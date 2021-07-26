@@ -1,0 +1,83 @@
+name: build
+on:
+  - pull_request
+  - push
+
+jobs:
+  build:
+    name: "Build backend"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        # - resolver: 'lts16'
+        #   stack-yaml: 'stack.lts16.yaml'
+        #   ghc: '8.8.4'
+        - resolver: 'lts17'
+          ghc: '8.10.4'
+    steps:
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Clone project
+        uses: actions/checkout@v2
+
+      - name: Generate docker tags and labels
+        id: docker-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: nejla/auth-service
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: Dockerfile.build
+          push: true
+          tags: ${{ steps.docker-meta.outputs.tags }}
+          labels: ${{ steps.docker-meta.outputs.labels }}
+
+  build-auth-web-image:
+    name: "build auth-web image"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone project
+        uses: actions/checkout@v2
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate docker tags and labels
+        id: docker-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: nejla/auth-web
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v2
+        with:
+          context: web
+          file: web/Dockerfile
+          push: true
+          tags: ${{ steps.docker-meta.outputs.tags }}
+          labels: ${{ steps.docker-meta.outputs.labels }}

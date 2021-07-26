@@ -1,20 +1,11 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 module SignedAuth.Headers where
 
 import           Control.Lens
-import           Data.Aeson            ((.=))
 import qualified Data.Aeson            as Aeson
-import qualified Data.Aeson.TH         as Aeson
 import           Data.ByteString       (ByteString)
-import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Lazy  as BSL
-import           Data.Functor          ((<&>))
-import qualified Data.Text.Encoding    as Text
-import           Data.Time.Clock
 import           Data.Time.Clock.POSIX (getPOSIXTime)
-import           Data.Word
-import Data.ByteString.Builder (byteString)
 
 import           SignedAuth.JWS
 import           SignedAuth.Nonce

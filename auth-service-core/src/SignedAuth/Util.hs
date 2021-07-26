@@ -1,7 +1,6 @@
 module SignedAuth.Util where
 
 import           Data.Aeson
-import           Data.Aeson.TH
 import           Data.Char
 import qualified Data.List     as List
 

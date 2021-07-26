@@ -1,11 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 -- | API tests
 
@@ -421,6 +419,15 @@ case_checkToken_expired pool = withRunAPI (timeout ?~ 0) pool $ \run -> do
   res2 <- run $ checkToken tok
   res2 `shouldBe` Nothing
 
+case_checkToken_unused_expired :: Case ()
+case_checkToken_unused_expired pool =
+  withRunAPI (tokenUnusedTimeout ?~ 0) pool $ \run -> do
+    _uid <- run $ createUser testUser
+    res1 <- runLogin run testUser
+    let tok = res1 ^. token
+    res2 <- run $ checkToken tok
+    res2 `shouldBe` Nothing
+
 case_checkTokenInstance :: Case ()
 case_checkTokenInstance = withUserToken testUser $ \tok uid run -> do
   iid <- run $ addInstance Nothing "testInstance"
@@ -457,7 +464,7 @@ case_closeOtherSesions_same_session =
     res `shouldBe` Just uid
 
 adminTests :: ConnectionPool -> TestTree
-adminTests pool = testGroup "admin" $
+adminTests pool = testGroup "admin"
   [ it "succeeds when user is admin" $ do
       withUserToken (testUser & roles .~ ["admin"]) $ \tok _uid run -> do
         res <- run $ checkAdmin "" tok
@@ -508,7 +515,8 @@ main = withTestDB $ \pool -> do
        , testCase "login otp wrong user"              $ case_login_otp_wrong_user               pool
        , testCase "checkToken"                        $ case_checkToken                         pool
        , testCase "checkToken bogus"                  $ case_checkToken_bogus                   pool
-       , testCase "checkToken expired"                  $ case_checkToken_expired                   pool
+       , testCase "checkToken token expires"          $ case_checkToken_expired                 pool
+       , testCase "checkToken unused token expires"   $ case_checkToken_unused_expired          pool
        , testCase "checkTokenInstance"                $ case_checkTokenInstance                 pool
        , testCase "checkTokenInstance not member"     $ case_checkTokenInstance_not_member      pool
        , testCase "logout"                            $ case_logout                             pool

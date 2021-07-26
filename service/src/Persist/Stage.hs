@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -10,7 +10,6 @@
 module Persist.Stage where
 
 import qualified Data.Aeson           as Aeson
-import           Data.Monoid
 import qualified Data.Text            as Text
 import qualified Data.UUID            as UUID
 import           Database.Esqueleto   (SqlString)
@@ -24,32 +23,32 @@ derivePersistFieldJSON "Aeson.Object"
 
 instance PersistField UserID where
     toPersistValue = toPersistValue . UUID.toString . unUserID
-    fromPersistValue = \x -> case x of
+    fromPersistValue = \case
         PersistLiteralEscaped bs ->
             case UUID.fromASCIIBytes bs of
-             Nothing -> Left $ "Invalid UUID: " <> (Text.pack $ show bs)
+             Nothing -> Left $ "Invalid UUID: " <> Text.pack (show bs)
              Just u -> Right $ UserID u
         PersistText txt ->
             case UUID.fromString $ Text.unpack txt of
-             Nothing -> Left $ "Invalid UUID: " <> (Text.pack $ show txt)
+             Nothing -> Left $ "Invalid UUID: " <> Text.pack (show txt)
              Just u -> Right $ UserID u
-        e -> Left $ "Can not convert to uuid: " <> (Text.pack $ show e)
+        e -> Left $ "Can not convert to uuid: " <> Text.pack (show e)
 
 instance PersistFieldSql UserID where
     sqlType _ = SqlOther "uuid"
 
 instance PersistField InstanceID where
     toPersistValue = toPersistValue . UUID.toString . unInstanceID
-    fromPersistValue = \x -> case x of
+    fromPersistValue = \case
         PersistLiteralEscaped bs ->
             case UUID.fromASCIIBytes bs of
-             Nothing -> Left $ "Invalid UUID: " <> (Text.pack $ show bs)
+             Nothing -> Left $ "Invalid UUID: " <> Text.pack (show bs)
              Just u -> Right $ InstanceID u
         PersistText txt ->
             case UUID.fromString $ Text.unpack txt of
-             Nothing -> Left $ "Invalid UUID: " <> (Text.pack $ show txt)
+             Nothing -> Left $ "Invalid UUID: " <> Text.pack (show txt)
              Just u -> Right $ InstanceID u
-        e -> Left $ "Can not convert to uuid: " <> (Text.pack $ show e)
+        e -> Left $ "Can not convert to uuid: " <> Text.pack (show e)
 
 instance PersistFieldSql InstanceID where
     sqlType _ = SqlOther "uuid"

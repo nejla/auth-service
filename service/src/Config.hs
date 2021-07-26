@@ -21,7 +21,6 @@ import qualified Control.Monad.Catch      as Ex
 import           Control.Monad.Logger
 import           Control.Monad.Trans
 import qualified Data.Aeson               as Aeson
-import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as BS
 import qualified Data.ByteString.Char8    as BS8
 import qualified Data.Char                as Char
@@ -146,6 +145,8 @@ getAuthServiceConfig :: (MonadIO m, MonadLogger m) =>
                      -> m Config
 getAuthServiceConfig conf = do
     to <- getConfMaybe' "TOKEN_TIMEOUT" "token.timeout" conf
+    tuto <- getConfMaybe' "TOKEN_UNUSED_TIMEOUT" "token.unused-timeout" conf
+
     configMaxAttempts <- getConf' "MAX_LOGIN_ATTEMPTS" "max-login-attempts"
                            (Right 5) conf
     configAttemptsTimeframe <- fromInteger <$> getConf'
@@ -162,6 +163,7 @@ getAuthServiceConfig conf = do
     accountCreationConfig <- getAccountCreationConfig conf
 
     return Config{ configTimeout = to
+                 , configTokenUnusedTimeout = tuto
                  , configMaxAttempts = configMaxAttempts
                  , configAttemptsTimeframe = configAttemptsTimeframe
                  , configOTPLength = otpl
@@ -246,7 +248,7 @@ setEmailConf conf =
                 | (prg:args) <- Text.splitOn " " cmd
                 , not (Text.null prg) ->
                   SendmailConfig
-                  { sendmailConfigPath = Text.unpack $ prg
+                  { sendmailConfigPath = Text.unpack prg
                   , sendmailConfigArguments = Text.unpack <$> args
                   }
               _ -> def
@@ -279,7 +281,7 @@ renderMsmtprc cfg tls auth =
   in case Mustache.renderMustacheW template dt of
        ([], txt) -> return txt
        (warnings, _) -> do
-         $logError $ "Could not render msmtprc: " <> (Text.pack $ show warnings)
+         $logError $ "Could not render msmtprc: " <> Text.pack (show warnings)
          liftIO Exit.exitFailure
   where
     infix 0 .=

@@ -4,15 +4,12 @@ module SignedAuth.JWS where
 
 import           Control.Lens
 import qualified Data.Aeson                 as Aeson
-import           Data.Aeson.Lens            (_JSON)
 import qualified Data.Aeson.TH              as Aeson
 import           Data.ByteString            (ByteString)
 import qualified Data.ByteString            as BS
 import qualified Data.ByteString.Base64.URL as B64U
 import qualified Data.ByteString.Lazy       as BSL
-import           Data.Functor               ((<&>))
 import           Data.Text                  (Text)
-import qualified Data.Text                  as Text
 import           Data.Time.Clock.POSIX      (POSIXTime)
 import           Data.Word
 

@@ -177,7 +177,7 @@ runRequest mbToken tr =
       th = case mbToken of
              Nothing -> []
              Just token -> [("X-Token", Text.encodeUtf8 token)]
-  in request (method $ trMethod tr) (trPath tr) (concat [ct, th]) (trBody tr)
+  in request (method $ trMethod tr) (trPath tr) (ct ++ th) (trBody tr)
 
 describeRequest :: TestRequest -> Text
 describeRequest tr = Text.decodeUtf8 $ method (trMethod tr) <> " " <> trPath tr

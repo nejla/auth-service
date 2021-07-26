@@ -8,10 +8,8 @@ module Util where
 
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
-import           Data.Monoid
 import qualified Data.Text.Lazy             as LText
 import qualified Data.Text.Lazy.IO          as LText
-import           Language.Haskell.TH
 import qualified Language.Haskell.TH.Quote  as TH
 import qualified Language.Haskell.TH.Syntax as TH
 import qualified Text.Microstache           as Mustache

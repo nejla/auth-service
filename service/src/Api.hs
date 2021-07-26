@@ -1,12 +1,11 @@
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Api where
 
@@ -20,13 +19,11 @@ import           Data.Maybe           (fromMaybe, maybeToList)
 import           Data.Text            (Text)
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as Text
-import qualified Data.Text.IO         as Text
 import           Database.Persist.Sql
 import qualified NejlaCommon          as NC
 import           Network.Wai
 import           Servant
 import qualified SignedAuth
-import           System.IO
 import           Types
 
 import           Logging              hiding (token)
