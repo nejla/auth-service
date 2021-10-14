@@ -39,7 +39,7 @@ import           Database.Esqueleto.Internal.Internal (unsafeSqlBinOp)
 
 import           Audit
 import           Monad
-import Control.Monad.Logger (LoggingT(runLoggingT))
+import Control.Monad.Logger (LoggingT(runLoggingT), askLoggerIO)
 
 orLMb :: [Maybe (SqlExpr (Value Bool))]
        -> SqlExpr (Value Bool)
@@ -319,7 +319,7 @@ sendOTP otpHandler (Email user') p (Password otp') = do
                           , "(", unPhone p , ")"
                           , ": " <> otp'
                           ]
-    lfn <- askLogFunc
+    lfn <- askLoggerIO
     liftIO $ runLoggingT (otpHandler p otp') lfn
 
 tokenChars :: [Char]

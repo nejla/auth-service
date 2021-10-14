@@ -1,8 +1,8 @@
-resolver: lts-17.5
+resolver: lts-18.10
 
 extra-deps:
   - git: git@git.nejla.com:nejla-ab/common.git
-    commit: 88595e7060e80064b3f8706b1daa9ca7b126326c
+    commit: 7a76b3253d31b0f23b1bf42681ca8e6d911006cb
   - '../auth-service-core'
   - base64-bytestring-1.2.0.1
 

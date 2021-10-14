@@ -94,7 +94,9 @@ Available configuration options:
 
 ### General Options
 
-* `TOKEN_TIMEOUT` (Int) _optional_: Time before login tokens expire in seconds after the token was created. Only affects newly created tokens. (e.g. 3600 = one hour). Tokens don't expire when unset
+* `TOKEN_TIMEOUT` (Int) _optional_: Time in seconds before login tokens expire  after the token was created. Only affects newly created tokens. (e.g. 3600 = one hour). Tokens don't expire when this is unset
+
+* `TOKEN_UNUSED_TIMEOUT` (Int) _optional_: Time in seconds before login tokens expire after they have last been used. Making a request to any endpoint that checks the token counts as a use. Affects all existing tokens. Token's don't expire when this is unset.
 
 ### Password Reset Emails
 If `EMAIL_FROM` is set, all options that aren't marked as optional become

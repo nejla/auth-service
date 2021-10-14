@@ -1,0 +1,4 @@
+- ignore: { name: Eta reduce, within: Main.postToken }
+- ignore: { name: Eta reduce, within: Test.Common.seconds }
+- ignore: { name: Eta reduce, within: Monad.runAPI }
+- ignore: { name: Redundant id, within: Main.case_add_user_instance }

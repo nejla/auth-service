@@ -162,7 +162,7 @@ login() {
                 -d "$LOGIN_STRING" \
                 http://$API/login)
 
-    TOKEN=$(echo "$RES" | jq -r '.token.token')
+    TOKEN=$(echo "$RES" | jq -r '.token')
     [[ -n "$TOKEN" ]]
 }
 
