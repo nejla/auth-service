@@ -54,6 +54,62 @@ The key has to be passed as a file and not an environment variable to avoid it l
 The public key does not have to be secured and can be passed to the backend
 e.g. as an environment variable.
 
+## API for internal requests
+
+Your application might want to talk to auth-service e.g. to retrieve user
+information. To that end, auth-service contains an internal API
+
+To use the API, you need to declare an API secret. First, generate a random key, e.g.
+```
+dd if=/dev/random of=/dev/stdout bs=16 count=1 | base64
+```
+then set the `SERVICE_TOKEN` environment variable in auth-service:
+
+```yaml
+auth-service:
+    environment:
+      - SERVICE_TOKEN=Q0rp0I5B5VChHu40i47YRA
+```
+
+### API definition
+
+All API endpoints require that the `X-Token` is set to the secret generated in the previous section
+
+####  `/service/users/by-uid`
+  * Takes 1..n query parameters `uid={uid}` and returns  user information for these users
+
+  Example: `/service/users/bu-uid?uid=68917a28-d8c5-42df-88e2-db97b881321b&uid=0867dc87-ec9a-4e14-8d7a-9e6e260c6390`
+
+  * Returns a list user objects
+
+  * `id`: ID of the found user
+  * `info` (optional): User info object if the user exists, absent otherwise
+
+  User info:
+  * `id`: ID of the user
+  * `email`: registered email address
+  * `name`: Full name
+  * `phone` (optional): Phone number registered for TFA
+  * `instances`: List of instance IDs the user has access to
+  * `roles`: List of user's roles
+  * `deactivate` (optional): Timestamp when the user was deactivated
+
+### Using servant-client
+
+You can connect to the API using servant client:
+
+```
+import qualified Servant.Client       as Client
+import           AuthService.Api
+import qualified AuthService.Types    as AuthService
+
+-- Extract the API endpoints from the API definition
+getUsersC = Client.client (Proxy :: Proxy ServiceAPI)
+```
+
+You can then use
+[Client.client](https://hackage.haskell.org/package/servant-client-0.18.3/docs/Servant-Client.html#v:client)
+to interact with the endpoint; don't forget to pass the secret as the first argument.
 
 ## Resolving credentials in the backend
 

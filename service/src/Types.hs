@@ -124,9 +124,10 @@ data Config = Config
   , configAccountCreation      :: AccountCreationConfig
   }
 
-newtype Secrets =
+data Secrets =
   Secrets
     { secretsHeaderPrivateKey     :: SignedAuth.PrivateKey
+    , secretsServiceToken         :: Text
     }
 
 -- | Necessary data to fill in a password reset email

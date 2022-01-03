@@ -36,6 +36,7 @@ module AuthService.SignedHeaders
   , Requiredness(..)
   , IsRole(..)
   , HasRole
+  , RoleVisibility(..)
    -- * Encoding headers
   , Sign.PrivateKey
   , Sign.mkKeys
@@ -320,14 +321,23 @@ mkAuthHeader noncePool privKey authHeader = do
 --------------------------------------------------------------------------------
 
 class IsRole (t :: k) where
-  -- | How to check if the user has the approriate role. Return "true" if the
-  -- role is present.
-  checkRole :: Proxy t -> [Text] -> Bool
+  -- | How to represent roles (e.g. a Text token or a ADT value)
+  type RoleRepr t
+  -- | How to check if the user has an approriate role. Return the matching role
+  -- if present
+  checkRole :: Proxy t -> [Text] -> Maybe (RoleRepr t)
 
 instance KnownSymbol s => IsRole (s :: Symbol) where
+  type RoleRepr s = Text
   checkRole proxy roles =
     let wantedHeader = Text.pack $ symbolVal proxy
-    in wantedHeader `List.elem` roles
+    in if wantedHeader `List.elem` roles
+       then Just wantedHeader
+       else Nothing
+
+
+-- | Whether to pass on the role data to the handler
+data RoleVisibility = RoleVisible | RoleInvisible
 
 -- | Combinator for checking for the presence of a role. Doesn't return anything.
 --
@@ -356,14 +366,37 @@ instance KnownSymbol s => IsRole (s :: Symbol) where
 -- >   checkRole _ = List.elem "user"
 -- >
 -- > type MyAPI = "users" :> HasRole 'RoleAdmin 'Optional :> Get '[JSON] User
-data HasRole (a :: k) (req :: Requiredness)
+data HasRole (a :: k) (vis :: RoleVisibility)
 
 instance ( HasServer api context
          , IsRole r
          , HasContextEntry context (Maybe AuthHeader)
          )
-    => HasServer (HasRole r 'Required :> api) context where
-  type ServerT (HasRole r 'Required :> api) m
+    => HasServer (HasRole r 'RoleVisible :> api) context where
+  type ServerT (HasRole r 'RoleVisible :> api) m
+    = RoleRepr r -> ServerT api m
+
+  route Proxy context subserver =
+    route (Proxy :: Proxy api) context (subserver `addAuthCheck` authCheck)
+    where
+       mbAuthHeader = getContextEntry context :: Maybe AuthHeader
+       authCheck =
+         case mbAuthHeader of
+           Nothing -> delayedFailFatal err401
+           Just authHeader ->
+             case checkRole (Proxy :: Proxy r) (authHeader ^. roles) of
+               Nothing -> delayedFailFatal err403
+               Just role -> return role
+
+  hoistServerWithContext _ pc nt s =
+    hoistServerWithContext (Proxy :: Proxy api) pc  nt . s
+
+instance ( HasServer api context
+         , IsRole r
+         , HasContextEntry context (Maybe AuthHeader)
+         )
+    => HasServer (HasRole r 'RoleInvisible :> api) context where
+  type ServerT (HasRole r 'RoleInvisible :> api) m
     = ServerT api m
 
   route Proxy context subserver =
@@ -374,8 +407,10 @@ instance ( HasServer api context
          case mbAuthHeader of
            Nothing -> delayedFailFatal err401
            Just authHeader ->
-             unless (checkRole (Proxy :: Proxy r) (authHeader ^. roles))
-               $ delayedFailFatal err403
+             case checkRole (Proxy :: Proxy r) (authHeader ^. roles) of
+               Nothing -> delayedFailFatal err403
+               Just role -> return ()
+
        -- Adds auth check that doesn't return anything
        addAuthCheck_ Delayed{..} new =
          Delayed
@@ -383,27 +418,8 @@ instance ( HasServer api context
          , ..
          }
 
-  hoistServerWithContext _ pc nt s = hoistServerWithContext (Proxy :: Proxy api) pc nt s
-
-instance ( HasServer api context
-         , IsRole r
-         , HasContextEntry context (Maybe AuthHeader)
-         )
-    => HasServer (HasRole r 'Optional :> api) context where
-  type ServerT (HasRole r 'Optional :> api) m
-    = Bool -> ServerT api m
-
-  route Proxy context subserver =
-    route (Proxy :: Proxy api) context (subserver `addAuthCheck` authCheck)
-    where
-       mbAuthHeader = getContextEntry context :: Maybe AuthHeader
-       authCheck =
-         case mbAuthHeader of
-           Nothing -> delayedFailFatal err401
-           Just authHeader ->
-             return $ checkRole (Proxy :: Proxy r) (authHeader ^. roles)
   hoistServerWithContext _ pc nt s =
-    hoistServerWithContext (Proxy :: Proxy api) pc nt . s
+    hoistServerWithContext (Proxy :: Proxy api) pc nt s
 
 instance Swagger.ToParamSchema (HasRole r required) where
   toParamSchema _ = Swagger.toParamSchema (Proxy :: Proxy String)

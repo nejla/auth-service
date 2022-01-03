@@ -15,6 +15,8 @@ import qualified Control.Monad.Catch  as Ex
 import           Control.Monad.Except
 import           Data.Aeson           (encode)
 import qualified Data.List            as List
+import           Data.Map.Strict      (Map)
+import qualified Data.Map.Strict      as Map
 import           Data.Maybe           (fromMaybe, maybeToList)
 import           Data.Text            (Text)
 import qualified Data.Text            as Text
@@ -212,12 +214,20 @@ serveCreateUserAPI pool conf tok addUser = do
 serveGetUsersAPI :: ConnectionPool
                  -> ApiState
                  -> Maybe B64Token
-                 -> Server GetUsersAPI
+                 -> Server GetAllUsersAPI
 serveGetUsersAPI pool conf tok = do
   _ <- isAdmin desc pool conf tok
   liftHandler $ runAPI pool conf getUsers
   where
     desc = "get users"
+
+serveGetUsersByRoles :: ConnectionPool
+                     -> ApiState
+                     -> Maybe B64Token
+                     -> Server GetUsersByRolesAPI
+serveGetUsersByRoles pool conf tok role = do
+  isAdmin "get users by role" pool conf tok
+  liftHandler $ runAPI pool conf $ getUsersByRole role
 
 
 serveDeactivateUsersAPI :: ConnectionPool
@@ -252,6 +262,7 @@ serveAdminAPI :: ConnectionPool
 serveAdminAPI pool conf tok =
        serveCreateUserAPI      pool conf tok
   :<|> serveGetUsersAPI        pool conf tok
+  :<|> serveGetUsersByRoles    pool conf tok
   :<|> serveDeactivateUsersAPI pool conf tok
   :<|> serveReactivateUsersAPI pool conf tok
 
@@ -321,6 +332,40 @@ serveCreateAccountApi pool conf xinstance createAccount =
         }
     return NoContent else throwError err403
 
+--------------------------------------------------------------------------------
+-- Micro Service Interface -----------------------------------------------------
+--------------------------------------------------------------------------------
+
+serveGetUsers :: ConnectionPool
+              -> ApiState
+              -> (forall a. Handler a -> Handler a )
+              -> Server GetUsers
+serveGetUsers pool conf check uids = check $ do
+  users <- liftHandler . runAPI pool conf $ getUsersByUuids uids
+  let uMap = Map.fromList [(returnUserInfoId user, user) | user <- users]
+  return [ FoundUserInfo
+           { foundUserInfoId = uid
+           , foundUserInfoInfo = Map.lookup uid uMap
+           }
+           | uid <- uids
+         ]
+
+--------------------------------------------------------------------------------
+-- Interface -------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+serveServiceAPI :: (HasServiceToken s Text) =>
+                   ConnectionPool
+                -> ApiState
+                -> s
+                -> Server ServiceAPI
+serveServiceAPI pool conf secrets token = do
+  serveGetUsers pool conf checkServiceApi
+  where
+    checkServiceApi :: forall a. Handler a -> Handler a
+    checkServiceApi f = if token == Just (secrets ^. serviceToken)
+    then f
+    else throwError err403
 
 serveAPI ::
      ConnectionPool
@@ -348,3 +393,4 @@ serveAPI pool noncePool conf secrets =
                                :<|> servePasswordResetAPI pool ctx
                                :<|> servePasswordResetTokenInfo pool ctx
                                :<|> serveCreateAccountApi pool ctx
+                               :<|> serveServiceAPI pool ctx secrets

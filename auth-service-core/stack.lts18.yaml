@@ -1,0 +1,14 @@
+resolver: lts-18.12
+
+extra-deps:
+  - base64-bytestring-1.2.0.1
+
+packages:
+  - .
+
+nix:
+  packages:
+    - zlib
+    - openssl                   # For tests
+
+allow-newer: true

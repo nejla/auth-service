@@ -90,7 +90,9 @@ mkConfig pool = do
           , configEmail = Just testEmailConfig
           , configAccountCreation = accountCreationConfig
           }
-        secrets = Secrets { secretsHeaderPrivateKey = privateKey }
+        secrets = Secrets { secretsHeaderPrivateKey = privateKey
+                          , secretsServiceToken = ""
+                          }
     return (conf, secrets)
   where
     -- | Delete all rows from all tables (Don't use TRUNACE TABLE since it's

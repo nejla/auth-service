@@ -1,0 +1,66 @@
+networks:
+  auth-service:
+  proxy:
+
+services:
+  auth-service-database:
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    image: postgres
+    healthcheck:
+      interval: 1s
+      test: 'pg_isready -U postgres'
+    networks:
+      - auth-service
+    restart: unless-stopped
+    volumes:
+      - ./database:/var/lib/postgresql/data
+  auth-service-service:
+    depends_on:
+      auth-service-database:
+        condition: service_healthy
+    environment:
+      - DB_HOST=auth-service-database
+    image: nejla/auth-service
+    networks:
+      - auth-service
+      - proxy
+    restart: unless-stopped
+    volumes:
+      - ./ed25519.priv.der:/run/secrets/header_signing_private_key:ro
+  auth-service-web:
+    depends_on:
+      auth-service-service:
+        condition: service_healthy
+    image: nejla/auth-web
+    links:
+      - auth-service-service:auth-service
+      - backend:2451cfe5-e4db-46a9-800f-38eeec997105
+    networks:
+      - proxy
+    restart: unless-stopped
+  backend:
+    build: backend
+    healthcheck:
+      interval: 1s
+      test: 'curl -f http://localhost/'
+    networks:
+      - proxy
+    restart: unless-stopped
+  proxy:
+    depends_on:
+      auth-service-web:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      interval: 1s
+      test: service nginx status || exit 1
+    image: nginx
+    networks:
+      - proxy
+    ports:
+      - '8080:80'
+    restart: unless-stopped
+    volumes:
+      - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro

@@ -739,8 +739,9 @@ closeOtherSessions tokenID = do
 -- Admin endpoints -------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-getUsers :: API [ReturnUserInfo]
-getUsers = do
+getUsersBy :: ( SV DB.User -> SqlExpr (Value Bool))
+              -> API [ReturnUserInfo]
+getUsersBy selector = do
   users <- runDB $ E.select . E.from $ \((user :: SV DB.User)
                                         `LeftOuterJoin` (role :: SVM DB.UserRole)
                                         `LeftOuterJoin`
@@ -752,6 +753,7 @@ getUsers = do
     on $ foreignKeyLR uinst inst
     on $ foreignKeyL uinst user
     on $ foreignKeyL role user
+    where_ $ selector user
     groupBy ( user E.^. DB.UserUuid
             , user E.^. DB.UserEmail
             , user E.^. DB.UserName
@@ -785,6 +787,21 @@ getUsers = do
     }
  where
    for = flip fmap
+
+getUsers :: API [ReturnUserInfo]
+getUsers = getUsersBy (\ _ -> val True)
+
+getUsersByUuids :: [UserID] -> API [ReturnUserInfo]
+getUsersByUuids uuids = getUsersBy
+  ( \user -> (user E.^. DB.UserUuid) `E.in_` valList uuids
+  )
+
+getUsersByRole :: Text -> API [ReturnUserInfo]
+getUsersByRole role = getUsersBy $
+  \user -> exists . E.from $ \(userRole :: SV DB.UserRole) ->
+     whereL [ foreignKey userRole user
+            , userRole E.^. DB.UserRoleRole ==. E.val role
+            ]
 
 deactivateUser :: UserID -> DeactivateAt -> API ()
 deactivateUser uid deactivate = do

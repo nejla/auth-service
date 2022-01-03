@@ -181,7 +181,12 @@ getSecrets conf = do
     getConf "SIGNED_HEADERS_PRIVATE_KEY_PATH" "signed-headers.private-key-path"
       (Right "/run/secrets/header_signing_private_key") conf
   signedHeaderKey <- readSignedHeaderKey $ Text.unpack signedHeaderKeyPath
-  return Secrets {secretsHeaderPrivateKey = signedHeaderKey }
+  serviceToken <-
+    getConf "SERVICE_TOKEN" "service-token"
+      (Left "Secret token for between-service communication") conf
+  return Secrets { secretsHeaderPrivateKey = signedHeaderKey
+                 , secretsServiceToken = serviceToken
+                 }
 
 -- Default template loaded from src/password-reset-email-template.html.mustache
 defaultPwResetTemplate :: Mustache.Template

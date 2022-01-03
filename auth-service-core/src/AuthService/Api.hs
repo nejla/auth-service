@@ -71,13 +71,18 @@ type CreateAccountAPI = "create-account"
 
 type CreateUserAPI = "users" :> ReqBody '[JSON] AddUser :> Post '[JSON] ReturnUser
 
-type GetUsersAPI = "users" :> Get '[JSON] [ReturnUserInfo]
+type GetAllUsersAPI = "users" :> Get '[JSON] [ReturnUserInfo]
+
+type GetUsersByRolesAPI = "users"
+                       :> "by-role"
+                       :> Capture "role" Text
+                       :> Get '[JSON] [ReturnUserInfo]
 
 type DeactivateUserAPI = "users"
-                    :> Capture "user" UserID
-                    :> "deactivate"
-                    :> ReqBody '[JSON] DeactivateUser
-                    :> PostNoContent
+                      :> Capture "user" UserID
+                      :> "deactivate"
+                      :> ReqBody '[JSON] DeactivateUser
+                      :> PostNoContent
 
 type ReactivateUserAPI = "users"
                     :> Capture "user" UserID
@@ -87,10 +92,25 @@ type ReactivateUserAPI = "users"
 type AdminAPI = "admin"
                  :> Header "X-Token" B64Token
                  :> (CreateUserAPI
-                      :<|> GetUsersAPI
+                      :<|> GetAllUsersAPI
+                      :<|> GetUsersByRolesAPI
                       :<|> DeactivateUserAPI
                       :<|> ReactivateUserAPI
+
                     )
+
+--------------------------------------------------------------------------------
+-- Micro Service Interface -----------------------------------------------------
+--------------------------------------------------------------------------------
+
+type GetUsers = "users"
+              :> "by-uid"
+              :> QueryParams "uid" UserID
+              :> Get '[JSON] [FoundUserInfo]
+
+type ServiceAPI = "service"
+                :> Header "X-Token" Text
+                :> GetUsers
 
 --------------------------------------------------------------------------------
 -- Interface
@@ -109,3 +129,4 @@ type Api = LoginAPI
            :<|> PasswordResetAPI
            :<|> PasswordResetInfoAPI
            :<|> CreateAccountAPI
+           :<|> ServiceAPI

@@ -205,6 +205,16 @@ deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "returnUserInfo"}
            ''ReturnUserInfo
 makeLensesWith camelCaseFields ''ReturnUserInfo
 
+-- | User info if found
+data FoundUserInfo = FoundUserInfo
+  { foundUserInfoId :: UserID
+  , foundUserInfoInfo :: Maybe ReturnUserInfo
+  } deriving Show
+
+deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "foundUserInfo"}
+           ''FoundUserInfo
+makeLensesWith camelCaseFields ''FoundUserInfo
+
 
 data Login = Login { loginUser     :: Email
                    , loginPassword :: Password
