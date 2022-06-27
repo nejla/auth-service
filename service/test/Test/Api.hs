@@ -128,6 +128,11 @@ postToken token path body =
                       , ("X-Token", Text.encodeUtf8 token)
                       ] body
 
+deleteToken :: Text -> ByteString -> WaiSession st SResponse
+deleteToken token path =
+  request "DELETE" path [("X-Token", Text.encodeUtf8 token)
+                         ] mempty
+
 getToken :: Text -> ByteString -> WaiSession st SResponse
 getToken token path = request "GET" path [("X-Token", Text.encodeUtf8 token)] ""
 
@@ -335,6 +340,32 @@ adminApiSpec = do
       postToken admin [i|/login|] [json|{ "user": "robert@example.com"
                               , "password": "pwd"
                               }|] `shouldRespondWith` 200
+
+  describe "DELETE /admin/users/<uid>" $ do
+    it "prevents a user from logging in"
+      $ withDefaultConfig $ withAdminToken $ \admin -> do
+        uid <- addUser admin "robert" []
+        postToken admin [i|/login|] [json|{ "user": "robert@example.com"
+                                          , "password": "pwd"
+                                          }|] `shouldRespondWith` 200
+
+        deleteToken admin [i|/admin/users/#{uid}|]
+              `shouldRespondWith` 204
+
+        postToken admin [i|/login|] [json|{ "user": "robert@example.com"
+                                          , "password": "pwd"
+                                          }|] `shouldRespondWith` 403
+
+    it "Deletes the user"
+      $ withDefaultConfig $ withAdminToken $ \admin -> do
+        uid <- addUser admin "robert" []
+        deleteToken admin [i|/admin/users/#{uid}|]
+              `shouldRespondWith` 204
+
+        users <- getToken admin "/admin/users"
+                `NC.shouldReturnA` (Proxy @[Types.ReturnUserInfo])
+
+        users ^.. each . email `NC.shouldBe` ["admin@example.com"]
 
 rateLimitSpec :: SpecWith ((), (Config -> Config) -> Application)
 rateLimitSpec =

@@ -94,10 +94,6 @@ createUser usr = do
                       }
        audit AuditUserCreated
            { auditUserID = uid
-           , auditUserName = unName $ usr ^. name
-           , auditUserPasswordHash = base64HashedPassword hash
-           , auditUserEmail = unEmail $ usr ^. email
-           , auditUserPhone = unPhone <$>  usr ^. phone
            , auditUserInstances = usr ^. instances
            , auditUserRoles = usr ^. roles
            }
@@ -829,3 +825,15 @@ reactivateUser uid = do
                }
 
     _ -> error $ "deactivateUser: More than one user affected: <> " ++ show num
+
+deleteUser :: UserID -> API ()
+deleteUser uid = do
+  db' $ P.deleteWhere [DB.TokenUser P.==. uid]
+  db' $ P.deleteWhere [DB.PasswordResetTokenUser P.==. uid]
+  db' $ P.deleteWhere [DB.UserRoleUser P.==. uid]
+  db' $ P.deleteWhere [DB.UserOtpUser P.==. uid]
+  db' $ P.deleteWhere [DB.UserInstanceUser P.==. uid]
+  cnt <- db' $ P.deleteWhereCount [DB.UserUuid P.==. uid]
+  case cnt of
+    0 -> NC.notFound "user by uuid" uid
+    _ -> audit AuditUserDeleted{ auditUserID = uid }

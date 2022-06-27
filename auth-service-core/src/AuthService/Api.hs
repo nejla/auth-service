@@ -84,6 +84,10 @@ type DeactivateUserAPI = "users"
                       :> ReqBody '[JSON] DeactivateUser
                       :> PostNoContent
 
+type DeleteUserAPI = "users"
+                   :> Capture "user" UserID
+                   :> DeleteNoContent
+
 type ReactivateUserAPI = "users"
                     :> Capture "user" UserID
                     :> "reactivate"
@@ -96,7 +100,7 @@ type AdminAPI = "admin"
                       :<|> GetUsersByRolesAPI
                       :<|> DeactivateUserAPI
                       :<|> ReactivateUserAPI
-
+                      :<|> DeleteUserAPI
                     )
 
 --------------------------------------------------------------------------------

@@ -45,6 +45,12 @@ migrations =
               , script = rawExecute
                            $(sqlFile "src/Persist/migrations/05-login-attempt.sql") []
               }
+  , Migration { expect = Just "5"
+              , to = "6"
+              , description = "Remove personal information from audit log"
+              , script = rawExecute
+                           $(sqlFile "src/Persist/migrations/06-audit-log-remove-identifying-info.sql") []
+              }
   ]
 
 doMigrate :: M ()

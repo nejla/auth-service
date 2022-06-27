@@ -253,6 +253,17 @@ serveReactivateUsersAPI pool conf tok uid = do
   where
     desc = "reactivateUser" <> Text.pack (show uid)
 
+serveDeleteUserAPI :: ConnectionPool
+                   -> ApiState
+                   -> Maybe B64Token
+                   -> Server DeleteUserAPI
+serveDeleteUserAPI pool conf tok uid = do
+    _ <- isAdmin desc pool conf tok
+    liftHandler $ runAPI pool conf $ deleteUser uid
+    return NoContent
+  where
+    desc = "deleteUser" <> Text.pack (show uid)
+
 adminAPIPrx :: Proxy AdminAPI
 adminAPIPrx = Proxy
 
@@ -265,6 +276,7 @@ serveAdminAPI pool conf tok =
   :<|> serveGetUsersByRoles    pool conf tok
   :<|> serveDeactivateUsersAPI pool conf tok
   :<|> serveReactivateUsersAPI pool conf tok
+  :<|> serveDeleteUserAPI pool conf tok
 
 --------------------------------------------------------------------------------
 -- Interface

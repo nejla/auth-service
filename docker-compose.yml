@@ -34,6 +34,8 @@ services:
       - ACCOUNT_CREATION=true
       - DEFAULT_INSTANCE=de305d54-75b4-431b-adb2-eb6b9e546014
       - SIGNED_HEADERS_PRIVATE_KEY_PATH=/run/secrets/header_signing_private_key
+      - SERVICE_TOKEN=Ey3FGSjWe3KgjcNfo3sm
+
     volumes:
       - ./secrets:/run/secrets
     # logging:
