@@ -209,6 +209,12 @@ http {
                 proxy_set_header X-Original-URI $request_uri;
         }
 
+        location = /auth-service-status {
+               ifdef(`NORATELIMIT', `', `
+                limit_req zone=service burst=1 nodelay;')
+                proxy_pass http://AUTH_SERVICE/status/;
+                proxy_set_header X-Original-URI $request_uri;
+        }
 
         location /admin/ {
               set $token $cookie_token;
