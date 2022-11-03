@@ -1,12 +1,8 @@
-# When resolver is changed, update .github/workflows/build.yaml and
-# stack.dockerhub.yaml. When dependencies are updated, also update
-# stack.dockerhub.yaml.
-
 resolver: lts-18.12
 
 extra-deps:
   - git: git@git.nejla.com:nejla-ab/common.git
-    commit: 3cbc5d0db2e8c18838159b92d7bb9b39f551e226
+    commit: 7a76b3253d31b0f23b1bf42681ca8e6d911006cb
   - '../auth-service-core'
   - base64-bytestring-1.2.0.1
   - git: https://github.com/mbg/wai-saml2.git
