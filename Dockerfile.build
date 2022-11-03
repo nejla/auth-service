@@ -5,8 +5,7 @@ FROM haskell:8.10.4 as build
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
-    apt-get -y install libpq-dev libxml2-dev
-
+    apt-get -y install libpq-dev
 
 COPY service /service
 COPY auth-service-core /auth-service-core

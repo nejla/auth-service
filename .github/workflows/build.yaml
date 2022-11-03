@@ -17,6 +17,9 @@ jobs:
         - resolver: 'lts17'
           ghc: '8.10.4'
     steps:
+      - name: Install libxml2-dev
+        run: sudo apt-get install -y libxml2-dev
+
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
