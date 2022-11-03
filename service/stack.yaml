@@ -5,6 +5,8 @@ extra-deps:
     commit: 7a76b3253d31b0f23b1bf42681ca8e6d911006cb
   - '../auth-service-core'
   - base64-bytestring-1.2.0.1
+  - git: https://github.com/mbg/wai-saml2.git
+    commit: 5d0efb965dce1e6a6a2d446fa1b089465f00f0cf
 
 docker:
   enable: false
@@ -17,3 +19,6 @@ nix:
   packages:
     - zlib
     - postgresql
+    - pkg-config
+    - libxml2
+    - openssl

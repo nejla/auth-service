@@ -51,6 +51,12 @@ migrations =
               , script = rawExecute
                            $(sqlFile "src/Persist/migrations/06-audit-log-remove-identifying-info.sql") []
               }
+  , Migration { expect = Just "6"
+              , to = "7"
+              , description = "Add SSO tables"
+              , script = rawExecute
+                           $(sqlFile "src/Persist/migrations/07-sso.sql") []
+              }
   ]
 
 doMigrate :: M ()

@@ -15,6 +15,26 @@ type LoginAPI = "login"
               :> ReqBody '[JSON] Login
               :> Post '[JSON] (Headers '[Header "X-Token" B64Token] ReturnLogin)
 
+-- Should generate a redirect
+type SSOLoginAPI = "sso" :> "login"
+                 :> Header "X-Instance" InstanceID
+                 :> Verb 'GET 303 '[ JSON ]
+                 (Headers '[ Header "Location" Text
+                           , Header "Cache-Control" Text
+                           , Header "Pragma" Text
+                           ]
+                   NoContent)
+
+type SSOAssertAPI = "sso" :> "assert"
+            :> Header "X-Instance" InstanceID
+            :> ReqBody '[FormUrlEncoded] SamlResponse
+            :> Verb 'POST 303 '[JSON]
+                (Headers '[ Header "X-Token" B64Token
+                          , Header "Location" Text
+                          ]
+                 ReturnLogin
+                )
+
 type LogoutAPI = "logout"
                :> Capture "token" B64Token
                :> Post '[JSON] NoContent
@@ -109,7 +129,7 @@ type AdminAPI = "admin"
 
 type GetUsers = "users"
               :> "by-uid"
-              :> QueryParams "uid" UserID
+              :> QueryParams "uid" Text
               :> Get '[JSON] [FoundUserInfo]
 
 type ServiceAPI = "service"
@@ -121,6 +141,8 @@ type ServiceAPI = "service"
 --------------------------------------------------------------------------------
 
 type Api = LoginAPI
+           :<|> SSOLoginAPI
+           :<|> SSOAssertAPI
            :<|> CheckTokenAPI
            :<|> PublicCheckTokenAPI
            :<|> LogoutAPI

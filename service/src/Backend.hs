@@ -10,36 +10,40 @@ module Backend
   ( module Backend
   ) where
 
-import           Control.Arrow                   ((***))
-import           Control.Lens                    hiding (from)
+import           Control.Arrow                        ((***))
+import           Control.Lens                         hiding (from)
 import           Control.Monad
-import qualified Control.Monad.Catch             as Ex
+import qualified Control.Monad.Catch                  as Ex
 import           Control.Monad.Except
-import qualified Crypto.BCrypt                   as BCrypt
-import           Data.ByteString.Base64          as B64
-import           Data.Maybe                      (listToMaybe, catMaybes)
-import           Data.Text                       (Text)
-import qualified Data.Text                       as Text
-import qualified Data.Text.Encoding              as Text
+import qualified Crypto.BCrypt                        as BCrypt
+import           Data.ByteString.Base64               as B64
+import           Data.Maybe                           (listToMaybe, catMaybes)
+import           Data.Maybe                           (fromMaybe)
+import           Data.Text                            (Text)
+import qualified Data.Text                            as Text
+import qualified Data.Text.Encoding                   as Text
 import           Data.Time.Clock
-import qualified Data.Traversable                as Traversable
-import qualified Data.UUID.V4                    as UUID
-import qualified Database.Esqueleto              as E
-import           Database.Esqueleto              hiding ((^.), (<&>), from)
-import qualified Database.Persist                as P
-import qualified Database.Persist.Sql            as P
+import qualified Data.Traversable                     as Traversable
+import qualified Data.UUID                            as UUID
+import qualified Data.UUID.V4                         as UUID
+import qualified Database.Esqueleto                   as E
+import           Database.Esqueleto                   hiding ((^.), (<&>), from)
+import           Database.Esqueleto.PostgreSQL        ( arrayAgg, arrayRemoveNull
+                                                      , maybeArray)
+import qualified Database.Persist                     as P
+import qualified Database.Persist.Sql                 as P
 import           System.Random
 
-import           NejlaCommon                     as NC
+import           NejlaCommon                          as NC
 
-import qualified Logging                         as Log
-import qualified Persist.Schema                  as DB
+import qualified Logging                              as Log
+import qualified Persist.Schema                       as DB
 import           Types
 import           Database.Esqueleto.Internal.Internal (unsafeSqlBinOp)
 
 import           Audit
 import           Monad
-import Control.Monad.Logger (LoggingT(runLoggingT), askLoggerIO)
+import           Control.Monad.Logger                 (LoggingT(runLoggingT), askLoggerIO)
 
 orLMb :: [Maybe (SqlExpr (Value Bool))]
        -> SqlExpr (Value Bool)
@@ -242,6 +246,12 @@ changeUserPassword mbToken user' password' = do
 -- Instances
 --------------------------------------------------------------------------------
 
+haveInstance :: InstanceID -> API (Maybe DB.Instance)
+haveInstance iid = do
+  insts <- db' . E.select . E.from $ \(inst :: SV DB.Instance) -> do
+    where_ (inst E.^. DB.InstanceUuid E.==. E.val iid)
+    return inst
+  return $ entityVal <$> listToMaybe insts
 
 addInstance :: Maybe InstanceID -> Text -> API InstanceID
 addInstance mbIid name' = do
@@ -368,6 +378,18 @@ deactivateTokenWhere selector = do
     whereL [ selector tok
            -- This is necessary to give accurate counts
            , isNothing $ tok E.^. DB.TokenDeactivated
+           ]
+
+deactivateSsoTokenWhere ::
+     (SV DB.SsoToken -> SqlExpr (Value Bool))
+  -> API Int
+deactivateSsoTokenWhere selector = do
+  now <- liftIO getCurrentTime
+  fmap fromIntegral $ runDB $ updateCount $ \(tok :: SV DB.SsoToken) -> do
+    E.set tok [DB.SsoTokenDeactivated E.=. val (Just now)]
+    whereL [ selector tok
+           -- This is necessary to give accurate counts
+           , isNothing $ tok E.^. DB.SsoTokenDeactivated
            ]
 
 -- | Create and send one time password for a user
@@ -621,6 +643,49 @@ getUserByToken tokenId = do
                         [DB.TokenLastUse P.=. Just now]
   return . fmap (unTokenKey . unValue *** entityVal) $ listToMaybe user'
 
+getSsoToken tokenId = do
+  now <- liftIO getCurrentTime
+  mbTokenUnusedExpiration <- getConfig tokenUnusedTimeout
+  let mbExpiresUnused = mbTokenUnusedExpiration <&> \tuexp ->
+        addUTCTime (negate $ fromInteger tuexp) now
+  deactivateSsoTokenWhere $ \tok ->
+    orLMb
+    [ Just (tok E.^. DB.SsoTokenExpires E.<=. val (Just now))
+    -- Expire token when it was last used before `now - $TOKEN_UNUSED_TIMEOUT`
+    , mbExpiresUnused <&> \expiresUnused ->
+        -- If the token was never used, treat the creation as the first use
+        coalesceDefault [tok E.^. DB.SsoTokenLastUse]
+          (tok E.^. DB.SsoTokenCreated)
+        -- now - $TOKEN_UNUSED_TIMEOUT
+        E.<=. val expiresUnused
+    ]
+  tok <- runDB . select . E.from $ \((ssoToken :: SV DB.SsoToken)
+                                     `LeftOuterJoin` (ssoRole :: SVM DB.SsoTokenRole)
+                                    ) -> do
+    on (foreignKeyL ssoRole ssoToken)
+    groupBy ( ssoToken E.^. DB.SsoTokenToken
+            , ssoToken E.^. DB.SsoTokenUserId
+            , ssoToken E.^. DB.SsoTokenEmail
+            , ssoToken E.^. DB.SsoTokenName
+            )
+    whereL [ ssoToken E.^. DB.SsoTokenToken E.==. E.val tokenId
+           , E.isNothing $ ssoToken E.^. DB.SsoTokenDeactivated
+           ]
+    return ( ssoToken E.^. DB.SsoTokenUserId
+           , ssoToken E.^. DB.SsoTokenEmail
+           , ssoToken E.^. DB.SsoTokenName
+           , ssoToken E.^. DB.SsoTokenInstanceId
+           , arrayRemoveNull
+             $ maybeArray (arrayAgg (ssoRole E.?. DB.SsoTokenRoleRole))
+
+           )
+  runDB $ P.updateWhere [DB.SsoTokenToken P.==. tokenId]
+                        [DB.SsoTokenLastUse P.=. Just now]
+  return $ listToMaybe [ (uid, email, name, inst, roles) |
+                         ( Value uid, Value email, Value name, Value inst
+                         , Value roles
+                         ) <- tok]
+
 getUserRoles :: UserID -> API [Text]
 getUserRoles uid =
   fmap (unValue <$>) . runDB . select . E.from $ \(uRole :: SV DB.UserRole) -> do
@@ -629,12 +694,31 @@ getUserRoles uid =
     return (uRole E.^. DB.UserRoleRole)
 
 getUserInfo :: B64Token -> API (Maybe ReturnUserInfo)
-getUserInfo token' = do
+getUserInfo token'
+  | isSsoToken token' = do
+      mbTok <- getSsoToken token'
+      Traversable.forM mbTok $ \(uid, email, name, iid, roles) -> do
+        mbInst <- getInstance iid
+        return ReturnUserInfo { returnUserInfoId = uid
+                            , returnUserInfoEmail = email
+                            , returnUserInfoName = name
+                            , returnUserInfoPhone = Nothing
+                            , returnUserInfoInstances =
+                                [ ReturnInstance
+                                  { returnInstanceName =
+                                      maybe "" DB.instanceName mbInst
+                                  , returnInstanceId = iid
+                                  }]
+                            , returnUserInfoRoles = roles
+                            , returnUserInfoDeactivate = Nothing
+                            }
+  | otherwise = do
   mbUser <- getUserByToken token'
   Traversable.forM mbUser $ \(_tid, user') -> do
     instances' <- getUserInstances (user' ^. DB.uuid)
     roles <- getUserRoles (user' ^. DB.uuid)
     return ReturnUserInfo { returnUserInfoId = user' ^. DB.uuid
+                                               . to (UUID.toText . unUserID )
                           , returnUserInfoEmail = user' ^. email
                           , returnUserInfoName = user' ^. name
                           , returnUserInfoPhone = user' ^. phone
@@ -643,12 +727,33 @@ getUserInfo token' = do
                           , returnUserInfoDeactivate = user' ^. deactivate
                           }
 
-checkTokenInstance :: Text -> B64Token -> InstanceID -> API (Maybe (UserID, Email, Name))
+isSsoToken :: B64Token -> Bool
+isSsoToken (B64Token tok) = "sso:" `Text.isPrefixOf` tok
+
+checkTokenInstance :: Text
+                   -> B64Token
+                   -> InstanceID
+                   -> API (Maybe (Text , Email, Name, [Text]
+                                 ))
 checkTokenInstance request (B64Token "") inst = do
     Log.logES Log.RequestNoToken{ Log.request = request
                                 , Log.instanceId = inst
                                 }
     return Nothing
+
+checkTokenInstance request tok inst
+  | isSsoToken tok = do
+      mbToken <- getSsoToken tok
+      case mbToken of
+        Nothing -> do
+          Log.logES  Log.RequestInvalidToken{ Log.request = request
+                                            , Log.token = unB64Token tok
+                                            , Log.instanceId = inst
+                                            }
+          return Nothing
+        Just (uid, email, name, _inst,  roles) -> do
+          return $ Just (uid, email, name, roles)
+
 checkTokenInstance request tok inst = do
     mbUsr <- getUserByToken tok
     case mbUsr of
@@ -668,10 +773,14 @@ checkTokenInstance request tok inst = do
                                                 , Log.instanceId = inst
                                                 }
             return Nothing
-          Just _ -> return $ Just ( DB.userUuid usr
-                                  , DB.userEmail usr
-                                  , DB.userName usr
-                                  )
+          Just _ -> do
+            let uid = DB.userUuid usr
+            roles <- getUserRoles uid
+            return $ Just ( UUID.toText $ unUserID uid
+                          , DB.userEmail usr
+                          , DB.userName usr
+                          , roles
+                          )
 
 data IsAdmin = IsAdmin -- Don't export Constructor
   deriving (Show, Eq)
@@ -699,9 +808,12 @@ checkAdmin request tok = do
                    }
           return Nothing
 
-checkToken :: B64Token -> API (Maybe UserID)
-checkToken tokenId = fmap (DB.userUuid . snd) <$> getUserByToken tokenId
-
+checkToken :: B64Token -> API (Maybe Text)
+checkToken token
+  | isSsoToken token = do
+      fmap (\(uid, _email, _name, _inst, _roles) -> uid ) <$> getSsoToken token
+checkToken token = fmap (UUID.toText . unUserID . DB.userUuid . snd)
+                       <$> getUserByToken token
 checkInstance :: InstanceID -> UserID -> API (Maybe DB.UserInstance)
 checkInstance inst user' = runDB $ P.get (DB.UserInstanceKey user' inst)
 
@@ -773,7 +885,7 @@ getUsersBy selector = do
                         , Value roles
                         , Value instanceIDs , Value instanceNames) ->
     ReturnUserInfo
-    { returnUserInfoId         = userId
+    { returnUserInfoId         = UUID.toText $ unUserID userId
     , returnUserInfoEmail      = userEmail
     , returnUserInfoName       = userName
     , returnUserInfoPhone      = userPhone
@@ -787,10 +899,13 @@ getUsersBy selector = do
 getUsers :: API [ReturnUserInfo]
 getUsers = getUsersBy (\ _ -> val True)
 
-getUsersByUuids :: [UserID] -> API [ReturnUserInfo]
-getUsersByUuids uuids = getUsersBy
-  ( \user -> (user E.^. DB.UserUuid) `E.in_` valList uuids
-  )
+getUsersByUids :: [Text] -> API [ReturnUserInfo]
+getUsersByUids uids =
+  let uuids = [UserID uuid | Just uuid <- UUID.fromText <$> uids ]
+  -- We should eventually change the userID type from UUID to Text to conform to
+  -- the public API. However, for now, leaving the internal Type be a UUID is OK
+  in getUsersBy ( \user -> (user E.^. DB.UserUuid) `E.in_` valList uuids
+                )
 
 getUsersByRole :: Text -> API [ReturnUserInfo]
 getUsersByRole role = getUsersBy $
@@ -837,3 +952,15 @@ deleteUser uid = do
   case cnt of
     0 -> NC.notFound "user by uuid" uid
     _ -> audit AuditUserDeleted{ auditUserID = uid }
+
+storeAssertionID :: Text -> API ()
+storeAssertionID id = do
+  _ <- db' $ P.insert (DB.AssertionId id)
+  return ()
+
+getInstance :: InstanceID -> API (Maybe DB.Instance)
+getInstance instId = do
+  inst <- db' . E.select . E.from $ \(inst :: SV DB.Instance) -> do
+    E.where_ (inst E.^. DB.InstanceUuid E.==. E.val instId)
+    return inst
+  return (entityVal <$> listToMaybe inst)

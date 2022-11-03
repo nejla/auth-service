@@ -105,6 +105,10 @@ data AuditEvent
     , auditOTPUsed :: Maybe Text
     , auditCreatedToken :: Text
     }
+  | AuditSsoTokenCreated
+    { auditSsoUserID :: Text
+    , auditCreatedToken :: Text
+    }
   | AuditTokenDeactivated
     { auditToken :: Text }
   | AuditOtherTokensDeactivated
@@ -138,6 +142,7 @@ auditLogType AuditUserInstanceAdded{} = "user instance added"
 auditLogType AuditUserInstanceRemoved{} = "user instance removed"
 auditLogType AuditOTPCreated{} = "OTP created"
 auditLogType AuditTokenCreated{} = "login token created"
+auditLogType AuditSsoTokenCreated{} = "login token created"
 auditLogType AuditTokenDeactivated{} = "login token deactivated"
 auditLogType AuditOtherTokensDeactivated{} = "other login tokens deactivated"
 auditLogType AuditUserDeactivated{} = "user deactivated"
@@ -157,6 +162,7 @@ auditLogUser AuditUserInstanceAdded      {auditUserID = uid} = Just uid
 auditLogUser AuditUserInstanceRemoved    {auditUserID = uid} = Just uid
 auditLogUser AuditOTPCreated             {auditUserID = uid} = Just uid
 auditLogUser AuditTokenCreated           {auditUserID = uid} = Just uid
+auditLogUser AuditSsoTokenCreated        {} = Nothing
 auditLogUser AuditTokenDeactivated       {} = Nothing
 auditLogUser AuditOtherTokensDeactivated {} = Nothing
 auditLogUser AuditUserDeactivated        {auditUserID = uid} = Just uid

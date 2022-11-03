@@ -77,3 +77,30 @@ AuditLog
   source Text
   sourceDetails Text
   user UserID Maybe -- Which user the log entry relates to (changes etc.) for easier aggregation
+
+-- SAML SSO
+
+-- Store Assertion IDs to avoid replay attacks
+AssertionId
+  value Text
+  Primary value
+
+SsoToken
+  token B64Token
+  Primary token
+  userId Text
+  email Email
+  name Name
+  instanceId InstanceID
+  Foreign Instance fkInstance instanceId
+  created UTCTime
+  expires UTCTime Maybe
+  lastUse UTCTime Maybe
+  deactivated UTCTime Maybe
+  deriving Show
+
+SsoTokenRole
+  token B64Token
+  Foreign SsoToken fkToken token
+  role Text
+  Primary token role

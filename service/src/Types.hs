@@ -17,17 +17,23 @@ module Types
   ) where
 
 import           Control.Lens
-import qualified Control.Monad.Catch  as Ex
+import qualified Control.Monad.Catch     as Ex
+import qualified Crypto.PubKey.RSA.Types as RSA
 import           Data.Default
-import           Data.Text            (Text)
-import           Data.Time            (NominalDiffTime)
+import           Data.Map.Strict         (Map)
+import qualified Data.Map.Strict         as Map
+import           Data.Text               (Text)
+import           Data.Time               (NominalDiffTime)
 import           Data.Typeable
-import           Network.Mail.Mime    (Address)
-import qualified Text.Microstache     as Mustache
+import           Data.UUID               (UUID)
+import qualified Data.UUID               as UUID
+import           Network.Mail.Mime       (Address)
+import qualified Text.Microstache        as Mustache
+import           Web.FormUrlEncoded
 
 import qualified SignedAuth
 import           AuthService.Types
-import           Control.Monad.Logger (LoggingT)
+import           Control.Monad.Logger    (LoggingT)
 
 --------------------------------------------------------------------------------
 -- Error
@@ -106,6 +112,21 @@ data AccountCreationConfig =
   , accountCreationConfigDefaultInstances :: [InstanceID]
   }
 
+data SamlInstanceConfig =
+  SamlInstanceConfig
+  { samlInstanceConfigEncryptionKey      :: RSA.PrivateKey
+  , samlInstanceConfigSigningKey :: RSA.PublicKey
+  , samlInstanceConfigAudience   :: Text
+  , samlInstanceConfigInstance   :: InstanceID
+  , samlInstanceConfigIdPBaseUrl    :: Text
+  , samlInstanceConfigRedirectAfterLogin :: Maybe Text
+  } deriving Show
+
+data SamlConfig =
+  SamlConfig
+  { samlConfigInstances :: Map InstanceID SamlInstanceConfig
+  } deriving Show
+
 data Config = Config
   { configTimeout              :: Maybe Integer -- token timeout in seconds
   , configTokenUnusedTimeout   :: Maybe Integer
@@ -122,6 +143,7 @@ data Config = Config
   , configEmail                :: Maybe EmailConfig
 
   , configAccountCreation      :: AccountCreationConfig
+  , configSamlConfig           :: Maybe SamlConfig
   }
 
 data Secrets =

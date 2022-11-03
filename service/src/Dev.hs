@@ -30,6 +30,7 @@ mkDevConf = do
         { accountCreationConfigEnabled = True
         , accountCreationConfigDefaultInstances = []
         }
+      , configSamlConfig           = Nothing
       }
     , apiStateAuditSource = AuditSourceManual
     , apiStateNoncePool = noncePool
@@ -37,6 +38,6 @@ mkDevConf = do
 
 
 runApiDev :: ConnectionString -> API a -> IO a
-runApiDev cstr m = runStderrLoggingT $withPostgresqlPool cstr 3 $ \pool -> do
+runApiDev cstr m = runStderrLoggingT $ withPostgresqlPool cstr 3 $ \pool -> do
   devConf <- liftIO mkDevConf
   liftIO $ runAPI pool devConf m

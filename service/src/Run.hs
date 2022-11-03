@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -7,10 +8,14 @@ module Run where
 import           Control.Lens
 import           Control.Monad.Logger
 import           Control.Monad.Reader
+import qualified Data.Char                   as Char
+import qualified Data.Foldable               as Foldable
 import qualified Data.Text                   as Text
 import qualified Data.Text.Encoding          as Text
 import qualified Data.Text.Encoding.Error    as Text
 import           Data.Text.Strict.Lens
+import           Data.UUID                   (UUID)
+import qualified Data.UUID                   as UUID
 import           Database.Persist.Postgresql
 import           Network.HTTP.Types          as HTTP
 import qualified Network.Socket              as Net
@@ -25,6 +30,7 @@ import           NejlaCommon                 ( withDBPool, getDBConnectInfo )
 
 import           Api
 import           Audit
+import           Backend                     (haveInstance, addInstance)
 import           Config
 import           Monad
 import           Persist.Migration           (doMigrate)
@@ -56,14 +62,24 @@ logMiddleware app req respond = app req respond'
       haddr6 == (0, 0, 0, 1)
 
 runMain :: IO ()
-runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn)
+runMain = do
+  logLevel <- lookupEnv "LOG" >>= \case
+    Nothing -> return LevelWarn
+    Just r -> case map Char.toLower r of
+                "debug" -> return LevelDebug
+                "info"  -> return LevelInfo
+                "warn"  -> return LevelWarn
+                "error" -> return LevelError
+                _ -> do
+                  hPutStrLn stderr $ "Unknown log level: " ++ r
+                  exitFailure
+  runStderrLoggingT . filterLogger (\_source level -> level >= logLevel)
        $ do
     confFile <- loadConf "auth_service"
     conf <- getAuthServiceConfig confFile
-    mbLogging <- liftIO $ lookupEnv "log"
-    let logM = case mbLogging of
-                Just "true" -> logMiddleware
-                _ -> Prelude.id
+    let logM = if logLevel <= LevelInfo
+               then  logMiddleware
+               else Prelude.id
     conInfo <- getDBConnectInfo confFile
     withDBPool conInfo 5 doMigrate $ \pool -> do
         args <- liftIO getArgs
@@ -96,12 +112,25 @@ runMain = runStderrLoggingT . filterLogger (\_source level -> level >= LevelWarn
          ("reactivateuser": args') -> run $ userReactivate args'
          ["run"] -> do
            secrets <- getSecrets confFile
+           run . Foldable.forM_ (accountCreationConfigDefaultInstances
+                           $ configAccountCreation  conf ) $ \inst -> do
+             haveInstance inst >>= \case
+               Just{} -> $logDebug $ "Instance " <> (Text.pack $ show inst)
+                                   <> " already exists"
+               Nothing -> do
+                 $logDebug $ "Adding default instance " <> (showInstanceID inst)
+                 _ <- addInstance (Just inst) (showInstanceID inst)
+                 return ()
+
            liftIO $ Warp.run 80 (logM $ serveAPI pool noncePool conf secrets)
          _ -> liftIO $ do
              hPutStrLn stderr
                "Usage: auth-service [run|adduser|chpass|addrole|rmrole|newinstance|addinstance|removeinstance|\
                \deactivateuser|eeactivateuser] [options]"
              exitFailure
+
+  where
+    showInstanceID (InstanceID iid) = UUID.toText iid
 
 -- Compares the schema to the SQL server and prints out necessary changes. For
 -- development.

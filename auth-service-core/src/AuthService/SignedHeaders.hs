@@ -200,7 +200,7 @@ logRequestBasic ctx mbAuthHeader next  req respond = do
         RequestLogUser
         { requestLogUserName = hdr ^. name . _Name
         , requestLogUserEmail = hdr ^. email . _Email
-        , requestLogUserId = hdr ^. userID . _UserID . to UUID.toText
+        , requestLogUserId = hdr ^. userID
         , requestLogUserRoles = hdr ^. roles
         }
   case handled of

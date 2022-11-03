@@ -11,6 +11,7 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
       libgmp10 \
       libicu-dev \
       libpq-dev \
+      libxml2-dev \
       locales \
       msmtp-mta \
       ssh-client && \

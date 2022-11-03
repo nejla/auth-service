@@ -89,6 +89,7 @@ mkConfig pool = do
           , configUseTransactionLevels = False
           , configEmail = Just testEmailConfig
           , configAccountCreation = accountCreationConfig
+          , configSamlConfig = Nothing
           }
         secrets = Secrets { secretsHeaderPrivateKey = privateKey
                           , secretsServiceToken = ""

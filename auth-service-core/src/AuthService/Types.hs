@@ -22,8 +22,9 @@ import           Data.String
 import           Data.Text                  (Text)
 import qualified Data.Text                  as Text
 import qualified Data.Text.Encoding         as Text
-import qualified Data.UUID                  as UUID
 import           Data.Time.Clock            (UTCTime)
+import qualified Data.UUID                  as UUID
+import qualified Web.FormUrlEncoded         as Form
 import           Web.HttpApiData
 import           Web.PathPieces
 
@@ -146,7 +147,7 @@ makePrisms ''B64Token
 
 type Role = Text
 
-data AuthHeader = AuthHeader { authHeaderUserID :: UserID
+data AuthHeader = AuthHeader { authHeaderUserID :: Text
                              , authHeaderEmail :: Email
                              , authHeaderName :: Name
                              , authHeaderRoles :: [Role]
@@ -173,7 +174,7 @@ deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "addUser"} ''AddUser
 makeLensesWith camelCaseFields ''AddUser
 
 
-data ReturnUser = ReturnUser { returnUserUser :: UserID
+data ReturnUser = ReturnUser { returnUserUser :: Text
                              , returnUserRoles :: [Role]
                              }
                     deriving (Show, Eq)
@@ -192,7 +193,7 @@ makeLensesWith camelCaseFields ''ReturnInstance
 deriveJSON defaultOptions{fieldLabelModifier = dropPrefix "returnInstance"}
     ''ReturnInstance
 
-data ReturnUserInfo = ReturnUserInfo { returnUserInfoId :: UserID
+data ReturnUserInfo = ReturnUserInfo { returnUserInfoId :: Text
                                      , returnUserInfoEmail :: Email
                                      , returnUserInfoName :: Name
                                      , returnUserInfoPhone :: Maybe Phone
@@ -207,7 +208,7 @@ makeLensesWith camelCaseFields ''ReturnUserInfo
 
 -- | User info if found
 data FoundUserInfo = FoundUserInfo
-  { foundUserInfoId :: UserID
+  { foundUserInfoId :: Text
   , foundUserInfoInfo :: Maybe ReturnUserInfo
   } deriving Show
 
@@ -329,3 +330,19 @@ makeLensesWith camelCaseFields ''DeactivateUser
 deriveJSON
   defaultOptions {fieldLabelModifier = camelTo2 '_' . dropPrefix "deactivateUser"}
   ''DeactivateUser
+
+--------------------------------------------------------------------------------
+-- SAML sso --------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+data SamlResponse =
+  SamlResponse
+  { samlResponseBody :: Text
+  , samlResponseRelayState :: Maybe Text
+  } deriving (Show)
+
+instance Form.FromForm SamlResponse where
+  fromForm f =
+    SamlResponse
+    <$> Form.parseUnique "SAMLResponse" f
+    <*> Form.parseMaybe "RelayState" f

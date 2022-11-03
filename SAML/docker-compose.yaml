@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  database:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=keycloak
+      - POSTGRES_DB=keycloak
+      - POSTGRES_PASSWORD=keycloak
+  idp:
+    image: bitnami/keycloak:18
+    environment:
+      - KEYCLOAK_ADMIN_USER=admin
+      - KEYCLOAK_ADMIN_PASSWORD=pwd
+      - KEYCLOAK_DATABASE_HOST=database
+      - KEYCLOAK_DATABASE_NAME=keycloak
+      - KEYCLOAK_DATABASE_USER=keycloak
+      - KEYCLOAK_DATABASE_PASSWORD=keycloak
+    depends_on:
+      - database
+    ports:
+      - "8070:8080"

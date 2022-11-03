@@ -98,11 +98,11 @@ exampleUser name roles =
                            , "roles": #{roles}
                            } |]
 
-addUser :: Text -> Text -> [Text] -> WaiSession st UUID
+addUser :: Text -> Text -> [Text] -> WaiSession st Text
 addUser token name roles = do
   res <- postToken token "/admin/users" (exampleUser name roles)
     `NC.shouldReturnA` (Proxy @Types.ReturnUser)
-  return $ res ^. user . _UserID
+  return $ res ^. user
 
 loginReq :: Text -> Text -> WaiSession st Text
 loginReq username password = do

@@ -19,6 +19,8 @@ import           Data.IORef
 import           Data.Monoid
 import           Data.Text               (Text)
 import qualified Data.Text               as Text
+import           Data.UUID               (UUID)
+import qualified Data.UUID               as UUID
 import           Database.Persist.Sql    (ConnectionPool)
 import qualified Prelude
 import           Prelude                 hiding (id)
@@ -403,7 +405,7 @@ withUserToken usr f = withUser usr $ \uid run -> do
 case_checkToken :: Case ()
 case_checkToken = withUserToken testUser $ \tok uid run -> do
   res <- run $ checkToken tok
-  res `shouldBe` Just uid
+  res `shouldBe` Just (UUID.toText $ unUserID uid)
 
 case_checkToken_bogus :: Case ()
 case_checkToken_bogus = withUser testUser $ \_uid run -> do
@@ -433,7 +435,10 @@ case_checkTokenInstance = withUserToken testUser $ \tok uid run -> do
   iid <- run $ addInstance Nothing "testInstance"
   run $ addUserInstance uid iid
   res <- run $ checkTokenInstance "" tok iid
-  res `shouldBe` Just (uid, addUserEmail testUser, addUserName testUser)
+  res `shouldBe` Just ((UUID.toText $ unUserID uid)
+                      , addUserEmail testUser, addUserName testUser
+                      , []
+                      )
 
 case_checkTokenInstance_not_member :: Case ()
 case_checkTokenInstance_not_member = withUserToken testUser $ \tok _uid run -> do
@@ -461,7 +466,7 @@ case_closeOtherSesions_same_session =
     tok2 <- view token <$> runLogin run testUser
     run $ closeOtherSessions tok2
     res <- run $ checkToken tok2
-    res `shouldBe` Just uid
+    res `shouldBe` Just (UUID.toText $ unUserID uid)
 
 adminTests :: ConnectionPool -> TestTree
 adminTests pool = testGroup "admin"

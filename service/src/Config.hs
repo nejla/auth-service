@@ -48,6 +48,7 @@ import           Types
 import           Util
 
 import           NejlaCommon.Config       hiding (Config)
+import           SAML.Config
 
 --------------------------------------------------------------------------------
 -- Configuration
@@ -162,6 +163,8 @@ getAuthServiceConfig conf = do
     let configOtp = fmap Twilio.sendMessage twilioConf
     accountCreationConfig <- getAccountCreationConfig conf
 
+    samlConfig <- getSAMLConfig conf
+
     return Config{ configTimeout = to
                  , configTokenUnusedTimeout = tuto
                  , configMaxAttempts = configMaxAttempts
@@ -173,6 +176,7 @@ getAuthServiceConfig conf = do
                  , configUseTransactionLevels = True
                  , configEmail = haveEmail
                  , configAccountCreation = accountCreationConfig
+                 , configSamlConfig = samlConfig
                  }
 
 getSecrets :: (MonadIO m, MonadLogger m) => Conf.Config -> m Secrets

@@ -7,6 +7,8 @@ services:
       - auth-service
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - 6432:5432
 
   auth-service:
     image: registry.nejla.com/nejla-ab/auth-service/auth-service
@@ -14,7 +16,7 @@ services:
       - database
       - mail
     environment:
-      - log=true
+      - LOG=DEBUG
       - DB_HOST=database
       - DB_USER=postgres
       - DB_DATABASE=postgres
@@ -32,12 +34,14 @@ services:
       - SITE_NAME=authservice-test.com
       - RESET_LINK_EXPIRATION_TIME=24 hours
       - ACCOUNT_CREATION=true
-      - DEFAULT_INSTANCE=de305d54-75b4-431b-adb2-eb6b9e546014
+      - DEFAULT_INSTANCE=657b5108-7559-4b8e-a643-dd0cc29b9e34
       - SIGNED_HEADERS_PRIVATE_KEY_PATH=/run/secrets/header_signing_private_key
       - SERVICE_TOKEN=Ey3FGSjWe3KgjcNfo3sm
+      - SAML_CONFIG_PATH=/run/saml
 
     volumes:
       - ./secrets:/run/secrets
+      - ./SAML/config:/run/saml:ro
     # logging:
     #   driver: gelf
     #   options:

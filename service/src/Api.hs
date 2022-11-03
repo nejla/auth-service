@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
 {-# LANGUAGE DataKinds #-}
@@ -6,36 +7,46 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Api where
 
 import           Backend
-import           Control.Lens         hiding (Context)
-import qualified Control.Monad.Catch  as Ex
+import           Control.Lens                     hiding (Context)
+import qualified Control.Monad.Catch              as Ex
 import           Control.Monad.Except
-import           Data.Aeson           (encode)
-import qualified Data.List            as List
-import           Data.Map.Strict      (Map)
-import qualified Data.Map.Strict      as Map
-import           Data.Maybe           (fromMaybe, maybeToList)
-import           Data.Text            (Text)
-import qualified Data.Text            as Text
-import qualified Data.Text.Encoding   as Text
+import           Data.Aeson                       (encode)
+import           Data.ByteString                  (ByteString)
+import qualified Data.ByteString                  as BS
+import qualified Data.List                        as List
+import           Data.Map.Strict                  (Map)
+import qualified Data.Map.Strict                  as Map
+import           Data.Maybe                       (fromMaybe, maybeToList)
+import           Data.String.Interpolate.IsString (i)
+import           Data.Text                        (Text)
+import qualified Data.Text                        as Text
+import qualified Data.Text.Encoding               as Text
+import           Data.UUID                        (UUID)
+import qualified Data.UUID                        as UUID
 import           Database.Persist.Sql
-import qualified NejlaCommon          as NC
+import qualified NejlaCommon                      as NC
 import           Network.Wai
+import qualified Network.Wai.SAML2                as SAML
 import           Servant
 import qualified SignedAuth
 import           Types
 
-import           Logging              hiding (token)
+import           Logging                          hiding (token)
 import           PasswordReset
-import qualified Persist.Schema       as DB
+import qualified Persist.Schema                   as DB
 
 import           Audit
 import           AuthService.Api
 import           Monad
-import           SignedAuth.Headers   (JWS(..))
+import qualified SAML
+import           SignedAuth.Headers               (JWS(..))
+
+import qualified Network.Wai.SAML2                as SAML
 
 --------------------------------------------------------------------------------
 -- Api -------------------------------------------------------------------------
@@ -95,6 +106,57 @@ serveLogin pool st loginReq = loginHandler
                          , errHeaders      = []
                          }
 
+serveSSOAssertAPI :: ConnectionPool -> ApiState -> Server SSOAssertAPI
+serveSSOAssertAPI pool st Nothing _ = do
+  liftHandler $ runAPI pool st $
+     logWarn "Got SSO assertion, but instance header is not set"
+  throwError err400
+serveSSOAssertAPI pool st (Just inst) samlResponse = do
+  case Map.lookup inst . samlConfigInstances
+       =<< configSamlConfig (apiStateConfig st) of
+    Nothing -> do
+      liftHandler $ runAPI pool st $
+        logInfo [i|Got SSO request, but SAML is not configured for instance #{inst}|]
+      throwError err404
+    Just samlConfig -> do
+      let cfg = SAML.config2SamlConf samlConfig
+      res <- liftHandler . runAPI pool st
+               $ SAML.ssoAssertHandler
+                   (samlInstanceConfigAudience samlConfig)
+                   (samlInstanceConfigInstance samlConfig)
+                   cfg samlResponse
+      case res of
+        Left e -> throwError err403
+        Right rl ->
+          let loc = fromMaybe "/" $ samlInstanceConfigRedirectAfterLogin samlConfig
+          in return ( addHeader @"X-Token" (returnLoginToken rl)
+                    $ addHeader @"Location" loc
+                      rl
+                    )
+
+serveSSOLoginAPI :: ConnectionPool -> ApiState -> Server SSOLoginAPI
+serveSSOLoginAPI pool st Nothing = do
+  liftHandler $ runAPI pool st $
+    logWarn "Got SSO login request, but instance header is unset"
+  throwError err400
+serveSSOLoginAPI pool st (Just inst) = do
+  case Map.lookup inst . samlConfigInstances
+       =<< configSamlConfig (apiStateConfig st) of
+    Nothing -> do
+      liftHandler $ runAPI pool st $
+        logInfo [i|ServeSSOLoginAPI: SAML is not configured for instance #{inst}|]
+      throwError err404
+    Just samlConf -> do
+      let audience = samlInstanceConfigAudience samlConf
+          baseUrl = samlInstanceConfigIdPBaseUrl samlConf
+      param <- liftIO $ SAML.ssoLoginHandler audience
+      return $
+        addHeader @"Location" ([i|#{baseUrl}?#{param}|] :: Text)
+        $ addHeader @"Cache-Control" ("no-cache, no-store" :: Text)
+        $ addHeader @"Pragma" ("no-cache" :: Text)
+        $ NoContent
+
+
 serveLogout :: ConnectionPool -> ApiState -> Server LogoutAPI
 serveLogout pool conf tok = logoutHandler >> return NoContent
   where
@@ -132,10 +194,7 @@ serveCheckToken pool st secrets req (Just tok) (Just inst) = checkTokenHandler
           logDebug $
             "Checking token " <> showText tok <> " for instance " <>
             showText inst
-          mbUser <- checkTokenInstance (fromMaybe "" req) tok inst
-          forM mbUser $ \(usrId, usrEmail, userName) -> do
-            roles' <- getUserRoles usrId
-            return (usrId, usrEmail, userName, roles')
+          checkTokenInstance (fromMaybe "" req) tok inst
       case res of
         Nothing -> throwError err403
         Just (usr, userEmail, userName, roles') -> do
@@ -166,7 +225,6 @@ servePublicCheckToken pool conf tok = checkTokenHandler
         case res of
          Nothing -> throwError err403
          Just _usr -> return NoContent
-
 
 serveGetUserInstancesAPI :: ConnectionPool
                          -> ApiState
@@ -205,9 +263,9 @@ serveCreateUserAPI pool conf tok addUser = do
   case res of
     Nothing -> throwError err500
     Just uid ->
-      return $ ReturnUser{ returnUserUser = uid
-                       , returnUserRoles = addUser ^. roles
-                       }
+      return $ ReturnUser{ returnUserUser = UUID.toText $ unUserID uid
+                         , returnUserRoles = addUser ^. roles
+                         }
   where
     desc = "create user " <> Text.pack (show addUser)
 
@@ -255,7 +313,7 @@ serveReactivateUsersAPI pool conf tok uid = do
 
 serveDeleteUserAPI :: ConnectionPool
                    -> ApiState
-                   -> Maybe B64Token
+ -> Maybe B64Token
                    -> Server DeleteUserAPI
 serveDeleteUserAPI pool conf tok uid = do
     _ <- isAdmin desc pool conf tok
@@ -353,7 +411,7 @@ serveGetUsers :: ConnectionPool
               -> (forall a. Handler a -> Handler a )
               -> Server GetUsers
 serveGetUsers pool conf check uids = check $ do
-  users <- liftHandler . runAPI pool conf $ getUsersByUuids uids
+  users <- liftHandler . runAPI pool conf $ getUsersByUids uids
   let uMap = Map.fromList [(returnUserInfoId user, user) | user <- users]
   return [ FoundUserInfo
            { foundUserInfoId = uid
@@ -379,6 +437,7 @@ serveServiceAPI pool conf secrets token = do
     then f
     else throwError err403
 
+
 serveAPI ::
      ConnectionPool
   -> SignedAuth.NoncePool
@@ -393,6 +452,8 @@ serveAPI pool noncePool conf secrets =
                        }
     in serve apiPrx $ serveStatus
                                :<|> serveLogin pool ctx
+                               :<|> serveSSOLoginAPI pool ctx
+                               :<|> serveSSOAssertAPI pool ctx
                                :<|> serveCheckToken pool ctx secrets
                                :<|> servePublicCheckToken pool ctx
                                :<|> serveLogout pool ctx
