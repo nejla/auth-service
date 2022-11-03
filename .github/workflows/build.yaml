@@ -14,8 +14,8 @@ jobs:
         # - resolver: 'lts16'
         #   stack-yaml: 'stack.lts16.yaml'
         #   ghc: '8.8.4'
-        - resolver: 'lts19'
-          ghc: '9.0.2'
+        - resolver: 'lts18'
+          ghc: '8.10.7'
     steps:
       - name: Login to DockerHub
         uses: docker/login-action@v1
