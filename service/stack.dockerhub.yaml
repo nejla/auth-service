@@ -1,6 +1,6 @@
 # stack.yaml for use by dockerhub
 
-resolver: lts-18.12
+resolver: lts-19.31
 
 extra-deps:
   - git: https://github.com/nejla/nejla-common.git
