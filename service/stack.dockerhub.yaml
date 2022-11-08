@@ -1,11 +1,20 @@
 # stack.yaml for use by dockerhub
 
-resolver: lts-17.9
+resolver: lts-18.12
 
 extra-deps:
   - git: https://github.com/nejla/nejla-common.git
-    commit: b6d0eda44396526ac2a5308a41f282b163c1abda
+    commit: dc73eab0fffd07b7aac77570c386dbe21ee2bb63
   - '../auth-service-core'
   - base64-bytestring-1.2.0.1
+  - git: https://github.com/mbg/wai-saml2.git
+    commit: 5d0efb965dce1e6a6a2d446fa1b089465f00f0cf
+  - hspec-wai-json-0.11.0
+
+flags:
+  nejla-common:
+    # Required for lts < 19
+    new-singletons: false
+
 
 allow-newer: true

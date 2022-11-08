@@ -1,18 +1,29 @@
+##############################################
+# NB: Changes to this file shold be reflected
+# in ../stack.dockerhub.yaml !
+##############################################
+
 resolver: lts-18.12
 
 extra-deps:
   - git: git@git.nejla.com:nejla-ab/common.git
-    commit: 7a76b3253d31b0f23b1bf42681ca8e6d911006cb
+    commit: 3cbc5d0db2e8c18838159b92d7bb9b39f551e226
   - '../auth-service-core'
   - base64-bytestring-1.2.0.1
   - git: https://github.com/mbg/wai-saml2.git
     commit: 5d0efb965dce1e6a6a2d446fa1b089465f00f0cf
+  - hspec-wai-json-0.11.0
 
 docker:
   enable: false
   image: nejla/haskell-build
 
 allow-newer: true
+
+flags:
+  nejla-common:
+    # Required for lts < 19
+    new-singletons: false
 
 nix:
   # shell-file: stack.nix

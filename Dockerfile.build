@@ -1,11 +1,12 @@
 # Dockerfile that builds the service from source
 # E.g. for publication on Dockerhub
 
-FROM haskell:8.10.4 as build
+FROM haskell:8.10.7 as build
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
-    apt-get -y install libpq-dev
+    apt-get -y install \
+      libpq-dev
 
 COPY service /service
 COPY auth-service-core /auth-service-core
@@ -25,8 +26,10 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
       libgmp10 \
       libicu-dev \
       libpq-dev \
+      libxml2-dev \
       locales \
       msmtp-mta \
+      pkg-config \
       ssh-client && \
     locale-gen en_US.UTF-8
 

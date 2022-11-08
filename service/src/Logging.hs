@@ -71,6 +71,18 @@ data Event
   | PasswordChanged {user :: !Email }
   deriving (Show)
 
+deriveJSON (defaultOptions{constructorTagModifier =
+                              cctu "_" . downcase . withoutPrefix "AuthFailedReason"
+                          }
+           ) ''AuthFailedReason
+
+
+deriveJSON defaultOptions{ sumEncoding = TaggedObject "type" "contents"
+                         , constructorTagModifier =
+                              cctu "_"
+                         }
+           ''Event
+
 instance IsLogEvent Event where
   toLogEvent v@OTPSent{}                =
     eventDetails "otp_sent" v
@@ -104,15 +116,3 @@ instance IsLogEvent Event where
     eventDetails "password_change_failed" v
   toLogEvent v@PasswordChanged{}        =
     eventDetails "password_changed" v
-
-deriveJSON (defaultOptions{constructorTagModifier =
-                              cctu "_" . downcase . withoutPrefix "AuthFailedReason"
-                          }
-           ) ''AuthFailedReason
-
-
-deriveJSON defaultOptions{ sumEncoding = TaggedObject "type" "contents"
-                         , constructorTagModifier =
-                              cctu "_"
-                         }
-           ''Event

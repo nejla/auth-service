@@ -26,7 +26,7 @@
 ### Generating and installing encryption key
   * This generates the RSA encryption key pair belonging to the client (auth-service)
   * generate the private key pair: `openssl genrsa -out key.pem 4096`
-  * generate the certificate: `openssl req -new -x509 -key key.pem -out cert.pem -days 360`
+  * generate the certificate: `openssl req -new -x509 -key key.pem -out cert.pem`
   * Copy private key, store in `SAML/config/{instance name}/key.pem`
   * Go to client settings, keys, under "Encryption keys config" enable "encrypt assertions"
   * Import the certificate

@@ -2,8 +2,6 @@
 
 An authentication micro-service written in Haskell.
 
-# Getting started
-
 ## Container Structure
 
 auth-service can be used to secure a single application instance or multiple
@@ -228,18 +226,19 @@ Please see auth-service.config for the configuration options.
 
 See [Library documentation](Doc/Library.md)
 
-# Managing users
+## Managing users
 
-## Creating new users
+### Creating new users
 
-### Using the CLI tool
+#### Using the CLI tool
+
 Users can be added by running the `adduser` command in the `auth-service` container:
 
 ```
 docker exec -it app_auth_1 auth-service adduser "My Name" my_password my_email@example.com
 ```
 
-### Using the web API
+#### Using the web API
 
 Users with the `Admin` role can create new users via the endpoint `POST
 /api/users` with the following request body:
@@ -271,7 +270,7 @@ Response:
 }
 ```
 
-### By users using the self-service API
+#### By users using the self-service API
 
 Users may create their own accounts using the `POST /api/create-account` endpoint if
 the `ACCOUNT_CREATION` environment variable is set to true. The instance of
@@ -293,7 +292,7 @@ The request body should look like this:
 
 * Nothing is returned
 
-## Changing user passwords
+### Changing user passwords
 
 Login passwords can be changed by calling `/api/change-password` :
 
@@ -303,7 +302,7 @@ POST /api/change-password
 
 ```
 
-## Setting user roles
+### Setting user roles
 
 Users can have roles set. The roles will be passed to the backend container in
 the `X-Roles` header
@@ -322,13 +321,13 @@ docker exec -it app_auth_1 auth-service rmrole "my_email@example.com" myrole
 
 Other changes can be done with SQL directly.
 
-# Authentication
+## Authentication
 
-## Logging in
+### Logging in
 
 Authentication is done via the `/api/login` endpoint.
 
-### Logging in without a One Time Password (OTP):
+#### Logging in without a One Time Password (OTP):
 
 To log in without an OTP (either because it's not known yet or not required):
 
@@ -345,7 +344,7 @@ is required.  Otherwise it will return an error:
 ```
 and the OTP will be sent out to the user
 
-### Logging in with an OTP
+#### Logging in with an OTP
 
 To log in with an OTP:
 
@@ -356,7 +355,7 @@ POST /api/login
 
 on success, a session token will be returned (see next section)
 
-### Session Token
+#### Session Token
 
 On successful login, a session token is returned in the following ways:
 
@@ -364,12 +363,12 @@ On successful login, a session token is returned in the following ways:
 * As a _cookie_: `token`
 * As a _response body_ : `{"token":"the_token"}`
 
-## Accessing resources
+### Accessing resources
 
 You need to send the roken recevied from `login` in all requests, either as a
 `X-Token` header or as a `token` cookie.
 
-## Logging out
+### Logging out
 Logging out is done like this:
 
 ```
@@ -378,7 +377,7 @@ POST /api/logout
 
 It deactivates the current token. Doesn't return anything
 
-## Deactivating all _other_ tokens
+### Deactivating all _other_ tokens
 
 You can deactivate all tokens belonging to the current user _except_ the current
 one by calling
@@ -387,10 +386,21 @@ one by calling
 POST /api/disable-sessions
 ```
 
-Legal
------
+## SAML 2.0
 
-Copyright © 2015-2021 Nejla AB. All rights reserved.
+auth-service supports **SP-initiated** login flows via **redirect request bindings** and **POST response bindings**. IdP-initiated login flows are **not** supported. The IdP **must not require client signatures**. The IdP **must encrypt assertions**.
+
+Three attributes are supported, of which two are required. The **name** and **email** attributes are **required**. The **role** attribute is **optional**. Multiple role attributes may be specified; however, joined values are **not** accepted.
+
+The IdP will need a **client ID**, a **root URL**, and a **certificate for encrypting assertions**.
+
+The SP will need a **request URL for authentication requests** and a **realm signing certificate**.
+
+For more information, see [SAML.md](SAML.md).
+
+## Legal
+
+Copyright © 2015-2022 Nejla AB. All rights reserved.
 
 Twilio and Twiml are registered trademarks of Twilio and/or its affiliates.
 Other names may be trademarks of their respective owners.

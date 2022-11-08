@@ -97,6 +97,7 @@ test-down:
 
 .PHONY: test
 test: $(tests)
+	env BASEIMAGE=$(TEST_IMAGE):$(TAG) \
 	docker-compose -f docker-compose.test.yaml -p authservice-test \
 	  run --rm test
 
