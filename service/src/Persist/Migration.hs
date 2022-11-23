@@ -57,6 +57,12 @@ migrations =
               , script = rawExecute
                            $(sqlFile "src/Persist/migrations/07-sso.sql") []
               }
+  , Migration { expect = Just "7"
+              , to = "8"
+              , description = "Add SSO request id table"
+              , script = rawExecute
+                           $(sqlFile "src/Persist/migrations/08-saml-request-id.sql") []
+              }
   ]
 
 doMigrate :: M ()

@@ -1,6 +1,6 @@
 ##############################################
 # NB: Changes to this file shold be reflected
-# in ../stack.dockerhub.yaml !
+# in stack.dockerhub.yaml !
 ##############################################
 
 resolver: lts-18.12
@@ -10,8 +10,8 @@ extra-deps:
     commit: 3cbc5d0db2e8c18838159b92d7bb9b39f551e226
   - '../auth-service-core'
   - base64-bytestring-1.2.0.1
-  - git: https://github.com/mbg/wai-saml2.git
-    commit: 5d0efb965dce1e6a6a2d446fa1b089465f00f0cf
+  - git: https://github.com/Philonous/wai-saml2.git
+    commit: b97c4aa979b53ed59257ae852942cd38bda46d9c
   - hspec-wai-json-0.11.0
 
 docker:

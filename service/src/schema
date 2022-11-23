@@ -104,3 +104,8 @@ SsoTokenRole
   Foreign SsoToken fkToken token
   role Text
   Primary token role
+
+SamlRequestId
+  requestId Text
+  Primary requestId
+  created UTCTime

@@ -388,7 +388,13 @@ POST /api/disable-sessions
 
 ## SAML 2.0
 
-auth-service supports **SP-initiated** login flows via **redirect request bindings** and **POST response bindings**. IdP-initiated login flows are **not** supported. The IdP **must not require client signatures**. The IdP **must encrypt assertions**.
+auth-service supports single sign-on via SAML 2.0. **SP-initiated** and **IdP-initiated** login flows are supported.
+
+**SP-initiated** login flows are supported via **redirect request bindings** (to `/api/sso/login`) and **POST response bindings** (to `/api/sso/assert`).
+
+**IdP-initiated** login flows are supported via **POST response bindings** (again to `/api/sso/assert`) if `allow_unsolicited_responses` is set to `true`.
+
+The IdP **must not require client signatures**.
 
 Three attributes are supported, of which two are required. The **name** and **email** attributes are **required**. The **role** attribute is **optional**. Multiple role attributes may be specified; however, joined values are **not** accepted.
 

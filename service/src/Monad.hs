@@ -30,11 +30,7 @@ data ApiState = ApiState { apiStateConfig :: Config
 
 makeLensesWith camelCaseFields ''ApiState
 
-type API a = NC.App ApiState 'NC.Privileged 'NC.ReadCommitted a
-
--- newtype API a = API { unAPI :: ReaderT ApiState IO a }
---               deriving ( Functor, Applicative, Monad, MonadIO
---                        , MonadThrow, MonadCatch)
+type API = NC.App ApiState 'NC.Privileged 'NC.ReadCommitted
 
 runDB :: ReaderT SqlBackend IO a -> API a
 runDB = NC.db'

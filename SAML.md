@@ -60,16 +60,29 @@ auth-service requires some attributes to function, you can set them up in keyclo
 The following configuration options are required
   * `SAML_CONFIG_PATH`: Path to the configuration directory
 
-The directory should contain a number of sub-directories, one for each instance that should have SAML enabled.
+The directory should contain a number of sub-directories, one for each instance
+that should have SAML enabled.
   * The names of the subdirectories are not relevant, you can choose them freely
   * Each directory should contain the following three files
-  * `key.pem`: client's PEM-encoded private RSA key, used to decrypt SAML assertions.
-  * `certificate.pem`: IdP's PEM-encoded X509 signing certificate. Used to check signed assertions. (the "realm certificate")
-  * `config`: a simple "key=value" encoded configuration for the instance, with the following fields:
-    * `audience`: the audience for SAML assertions (has to match the client name in keycloak or other IdPs)
+  * `key.pem`: client's PEM-encoded private RSA key, used to decrypt SAML
+    assertions.
+  * `certificate.pem`: IdP's PEM-encoded X509 signing certificate. Used to check
+    signed assertions. (the "realm certificate")
+  * `config`: a simple "key=value" encoded configuration for the instance, with
+    the following fields:
+    * `audience`: the audience for SAML assertions (has to match the client name
+      in keycloak or other IdPs)
     * `idp_request_url`: The IdP's URL for authentication requests
-    * `instance`: The auth-service instance this configuration applies to. Please note that each instance can only have **one** SAML configuration, multiple configurations will overwrite each other in an unspecified order.
+    * `instance`: The auth-service instance this configuration applies
+      to. Please note that each instance can only have **one** SAML
+      configuration, multiple configurations will overwrite each other in an
+      unspecified order.
     * `redirect_after_login`: URL to redirect after SAML login succeeds
+    * `allow_unencrypted_assertions`: Accept unencrypted assertions from the IdP
+      (encrypted assertions are always accepted). Note that the encryption key
+      still needs to be set.
+    * `allow_unsolicited_responses`: Accept unsolicited auth responses,
+      e.g. IdP-initiated SSO.
 
 Example for the `config` file:
 ```

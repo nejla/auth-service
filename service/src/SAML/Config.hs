@@ -3,13 +3,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module SAML.Config where
 
-import           Control.Monad.Logger             (logError)
+import           Control.Monad.Logger             (logError, MonadLogger)
 import           Control.Monad.Trans
 import qualified Data.ByteString                  as BS
-import           Data.Default                     (def)
+import qualified Data.Configurator.Types          as Config
 import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as Map
 import           Data.Maybe                       (catMaybes)
@@ -47,13 +48,30 @@ readConfigLines txt =
                        Just v -> [(k, v)]
 
 readConfigFile :: MonadIO m => FilePath -> m (Map Text Text)
-readConfigFile path = liftIO $ do
-  txt <- Text.readFile path
+readConfigFile pth = liftIO $ do
+  txt <- Text.readFile pth
   return $ readConfigLines txt
 
+getSamlConfig :: (MonadIO m, MonadLogger m) =>
+  FilePath -> FilePath -> m SamlInstanceConfig
 getSamlConfig base inst = do
   let path = base </> inst
-  let configurationPath = path </> "config"
+
+  -- config file
+  let conffilePath = path </> "config"
+  conf <- readConfigFile conffilePath
+  samlInstanceConfigAudience <- get "audience" conf
+  let samlInstanceConfigRedirectAfterLogin = Map.lookup "redirect_after_login" conf
+  samlInstanceConfigInstance <- get "instance" conf >>= \instTxt ->
+    case UUID.fromText instTxt of
+      Nothing -> do
+        $logError [i|SAML: Could not read instance ID #{instTxt} for folder #{inst} as an UUID|]
+        liftIO exitFailure
+      Just iid -> return $ InstanceID iid
+  samlInstanceConfigIdPBaseUrl <- get "idp_request_url" conf
+
+  samlInstanceConfigAllowUnencrypted <- getBool "allow_unencrypted_assertions" conf
+  samlInstanceConfigAllowUnsolicited <- getBool "allow_unsolicited_responses" conf
 
   -- Private key
   let privateKeyPath = path </> "key.pem"
@@ -73,27 +91,27 @@ getSamlConfig base inst = do
       liftIO exitFailure
     Right r -> return r
 
-  -- config file
-  let conffilePath = path </> "config"
-  conf <- readConfigFile conffilePath
-  samlInstanceConfigAudience <- get "audience" conf
-  let samlInstanceConfigRedirectAfterLogin = Map.lookup "redirect_after_login" conf
-  samlInstanceConfigInstance <- get "instance" conf >>= \instTxt ->
-    case UUID.fromText instTxt of
-      Nothing -> do
-        $logError [i|SAML: Could not read instance ID #{instTxt} for folder #{inst} as an UUID|]
-        liftIO exitFailure
-      Just iid -> return $ InstanceID iid
-  samlInstanceConfigIdPBaseUrl <- get "idp_request_url" conf
-
   return SamlInstanceConfig{..}
+
   where
     get k m = case Map.lookup k m of
                   Just v -> return v
                   Nothing -> do
                     $logError [i|SAML: missing configuration entry #{k} for folder ${inst}|]
                     liftIO exitFailure
+    getBool k m =
+      case Map.lookup k m of
+        Nothing -> return False
+        Just txt ->
+          let v = Text.toLower txt
+          in if | v == "true" -> return True
+                | v == "false" -> return False
+                | otherwise -> do
+                    $logError [i|SAML: Could not parse configuration value for key #{k}, expected "true" or "false", but got #{txt}|]
+                    liftIO exitFailure
 
+getConfigs :: (MonadIO m, MonadLogger m) =>
+              FilePath -> m [(InstanceID, SamlInstanceConfig)]
 getConfigs basePath = do
   entries <- liftIO $ Dir.getDirectoryContents basePath
   configs <- Traversable.forM entries $ \dir ->
@@ -106,11 +124,13 @@ getConfigs basePath = do
         else return Nothing
   return $ catMaybes configs
 
+getSAMLConfig :: (MonadLogger m, MonadIO m) =>
+                 Config.Config -> m (Maybe SamlConfig)
 getSAMLConfig conf = do
   mbSamlConfPath <- getConfMaybe "SAML_CONFIG_PATH"
     "saml.configPath" conf
   case mbSamlConfPath of
     Nothing -> return Nothing
-    Just path -> do
-      configs <- getConfigs $ Text.unpack path
+    Just p -> do
+      configs <- getConfigs $ Text.unpack p
       return (Just SamlConfig{samlConfigInstances = Map.fromList configs})

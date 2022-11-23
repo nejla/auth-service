@@ -118,17 +118,13 @@ serveSSOAssertAPI pool st (Just inst) samlResponse = do
       liftHandler $ runAPI pool st $
         logInfo [i|Got SSO request, but SAML is not configured for instance #{inst}|]
       throwError err404
-    Just samlConfig -> do
-      let cfg = SAML.config2SamlConf samlConfig
+    Just samlConfig' -> do
       res <- liftHandler . runAPI pool st
-               $ SAML.ssoAssertHandler
-                   (samlInstanceConfigAudience samlConfig)
-                   (samlInstanceConfigInstance samlConfig)
-                   cfg samlResponse
+               $ SAML.ssoAssertHandler samlConfig' samlResponse
       case res of
-        Left e -> throwError err403
+        Left _ -> throwError err403
         Right rl ->
-          let loc = fromMaybe "/" $ samlInstanceConfigRedirectAfterLogin samlConfig
+          let loc = fromMaybe "/" $ samlInstanceConfigRedirectAfterLogin samlConfig'
           in return ( addHeader @"X-Token" (returnLoginToken rl)
                     $ addHeader @"Location" loc
                       rl
@@ -149,7 +145,7 @@ serveSSOLoginAPI pool st (Just inst) = do
     Just samlConf -> do
       let audience = samlInstanceConfigAudience samlConf
           baseUrl = samlInstanceConfigIdPBaseUrl samlConf
-      param <- liftIO $ SAML.ssoLoginHandler audience
+      param <- liftHandler . runAPI pool st $ SAML.ssoLoginHandler audience
       return $
         addHeader @"Location" ([i|#{baseUrl}?#{param}|] :: Text)
         $ addHeader @"Cache-Control" ("no-cache, no-store" :: Text)
