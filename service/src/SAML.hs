@@ -161,13 +161,12 @@ ssoAssertHandler cfg response = runExceptT $ do
                                       (Text.encodeUtf8 $ samlResponseBody response))
          >>= \case
            Left e -> do
-             lift . Log.logInfo $ "Failed validating SAML assertion: "
+             lift . Log.logError $ "Failed validating SAML assertion: "
                                     <> Text.pack (show e)
              lift . Log.logDebug $
                (either (const "could not decode Base64") Text.decodeUtf8 . B64.decode . Text.encodeUtf8 $ samlResponseBody response)
              throwError SSOInvalid
            Right r -> do
-             liftIO $ print r
              return r
 
   -- Reference [InResponseTo]
@@ -197,11 +196,11 @@ ssoAssertHandler cfg response = runExceptT $ do
       getAttr name' = do
         getAttrs name' >>= \case
           [] -> do
-            Log.logInfo [i|Missing SAML attribute: #{name'}|]
+            Log.logError [i|Missing SAML attribute: #{name'}|]
             throwError SSOInvalid
           [x] -> return x
           (_:_:_) -> do
-            Log.logInfo [i|Duplicate SAML attribute: #{name'}|]
+            Log.logError [i|Duplicate SAML attribute: #{name'}|]
             throwError SSOInvalid
 
   email <- getAttr "email"
@@ -213,18 +212,18 @@ ssoAssertHandler cfg response = runExceptT $ do
       Nothing -> return $ samlInstanceConfigInstance cfg
       Just [instTxt] | Just inst <- UUID.fromText instTxt -> return $ InstanceID inst
                      | otherwise -> do
-                         Log.logInfo $ "Could not parse SAML instance id "
+                         Log.logError $ "Could not parse SAML instance id "
                              <> instTxt
                          throwError SSOInvalid
       Just{} -> do
-        Log.logInfo "Multiple SAML instances are unsupported"
+        Log.logError "Multiple SAML instances are unsupported"
         throwError SSOInvalid
   Log.logDebug $ "instanceId "  <> Text.pack (show instanceId)
 
   mbInstance <- lift $ getInstance instanceId
   case mbInstance of
     Nothing -> do
-      Log.logInfo $ "Unknown instance " <> Text.pack (show instanceId)
+      Log.logError $ "Unknown instance " <> Text.pack (show instanceId)
       throwError SSOInvalid
     Just inst -> do
       lift
