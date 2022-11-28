@@ -43,6 +43,7 @@ library:
   - Persist.Schema
   - Persist.Stage
   - Run
+  - SAML
   - Twilio
   - Types
   - User
@@ -138,6 +139,7 @@ tests:
     - persistent-postgresql
     - persistent-sqlite
     - resource-pool
+    - template-haskell
     - text
     - time
     - unliftio-core
@@ -173,6 +175,7 @@ tests:
     - tasty-hunit
     - tasty-quickcheck
     - tasty-th
+    - template-haskell
     - text
     - time
     - unliftio-core

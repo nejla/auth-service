@@ -12,6 +12,8 @@ import           Data.Time.Clock
 import qualified Data.UUID                         as UUID
 import           Database.Persist.Postgresql       as Postgres
 import           Database.Persist.Sql              as P
+import           Language.Haskell.TH.Quote
+import qualified Language.Haskell.TH.Syntax        as TH
 import qualified NejlaCommon                       as NC
 import qualified NejlaCommon.Config                as NC
 import           NejlaCommon.Persistence.Migration (sql)
@@ -117,3 +119,16 @@ withRunAPI changeConf pool f = do
 
 seconds :: Integer -> NominalDiffTime
 seconds s = fromIntegral s
+
+
+uuidQ :: QuasiQuoter
+uuidQ =
+  QuasiQuoter
+  { quoteExp = \txt ->
+                 case UUID.fromString txt of
+                     Nothing -> fail $ "Could not read UUID " ++ show txt
+                     Just u -> TH.lift u
+  , quoteDec = error "uuid.quoteDec: Not implemented"
+  , quotePat = error "uuid.quotePat: Not implemented"
+  , quoteType = error "uuid.quoteType: Not implemented"
+  }

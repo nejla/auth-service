@@ -751,8 +751,15 @@ checkTokenInstance request tok inst
                                             , Log.instanceId = inst
                                             }
           return Nothing
-        Just (uid, email, name, _inst,  roles) -> do
-          return $ Just (uid, email, name, roles)
+        Just (uid, email, name, tokenInst, roles)
+          | tokenInst == inst -> do return $ Just (uid, email, name, roles)
+          | otherwise -> do
+            Log.logES Log.RequestInvalidInstance{ Log.user = email
+                                                , Log.request = request
+                                                , Log.tokenId = 0
+                                                , Log.instanceId = inst
+                                                }
+            return Nothing
 
 checkTokenInstance request tok inst = do
     mbUsr <- getUserByToken tok
