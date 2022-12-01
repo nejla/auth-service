@@ -792,7 +792,7 @@ checkTokenInstance request tok inst = do
 data IsAdmin = IsAdmin -- Don't export Constructor
   deriving (Show, Eq)
 
--- | Check that the token represents an Admin
+-- | Check that the token represents an admin
 checkAdmin :: Text
            -> B64Token
            -> API (Maybe IsAdmin)

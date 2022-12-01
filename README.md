@@ -240,7 +240,7 @@ docker exec -it app_auth_1 auth-service adduser "My Name" my_password my_email@e
 
 #### Using the web API
 
-Users with the `Admin` role can create new users via the endpoint `POST
+Users with the `admin` role can create new users via the endpoint `POST
 /api/users` with the following request body:
 
 ```json
