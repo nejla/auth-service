@@ -28,32 +28,6 @@ dependencies:
   - auth-service-core
 ```
 
-## Creating header signing keys
-
-We need a ed25519 keypair to sign and verify headers. You can create it using
-`openssl` and `base64` like this (make sure to set the right permissiosn):
-
-```sh
-openssl genpkey -algorithm ed25519 -outform der | base64 > ed25519.priv.der
-chmod 0600 ed25519.priv.der
-```
-
-and
-
-```sh
-base64 -d ed25519.priv.der \
-  | openssl pkey -inform der -pubout -outform der \
-  | base64 > ed25519.pub.der
-```
-
-When starting the auth-service container, we need to mount the private key to
-`/run/secrets/header_signing_private_key` (or set
-`SIGNED_HEADERS_PRIVATE_KEY_PATH` to the path where we put it)
-The key has to be passed as a file and not an environment variable to avoid it leaking.
-
-The public key does not have to be secured and can be passed to the backend
-e.g. as an environment variable.
-
 ## API for internal requests
 
 Your application might want to talk to auth-service e.g. to retrieve user
@@ -78,7 +52,7 @@ All API endpoints require that the `X-Token` is set to the secret generated in t
 ####  `/service/users/by-uid`
   * Takes 1..n query parameters `uid={uid}` and returns  user information for these users
 
-  Example: `/service/users/bu-uid?uid=68917a28-d8c5-42df-88e2-db97b881321b&uid=0867dc87-ec9a-4e14-8d7a-9e6e260c6390`
+  Example: `/service/users/by-uid?uid=68917a28-d8c5-42df-88e2-db97b881321b&uid=0867dc87-ec9a-4e14-8d7a-9e6e260c6390`
 
   * Returns a list user objects
 

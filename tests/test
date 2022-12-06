@@ -485,7 +485,7 @@ docker_test() {
     login || fail "could not log in"
     call "change-password" \
          -H "Content-Type: application/json" \
-         -d "{\"oldPasword\":\"$PASSWORD\",\"newPassword\":\"$PASSWORD2\"}"
+         -d "{\"oldPassword\":\"$PASSWORD\",\"newPassword\":\"$PASSWORD2\"}"
     logout
     login $USER $PASSWORD2 || fail "Could not login with new password"
     login && fail "could still log on with old credentials"

@@ -580,7 +580,7 @@ login timeframe remoteAddress maxAttempts
 changePassword :: B64Token
                -> ChangePassword
                -> API (Either ChangePasswordError ())
-changePassword tok ChangePassword { changePasswordOldPasword = oldPwd
+changePassword tok ChangePassword { changePasswordOldPassword = oldPwd
                                   , changePasswordNewPassword = newPwd
                                   , changePasswordOtp = otp
                                   } = runExceptT $ do
@@ -643,6 +643,8 @@ getUserByToken tokenId = do
                         [DB.TokenLastUse P.=. Just now]
   return . fmap (unTokenKey . unValue *** entityVal) $ listToMaybe user'
 
+getSsoToken :: B64Token
+            -> API (Maybe (Text, Email, Name, InstanceID, [Text]))
 getSsoToken tokenId = do
   now <- liftIO getCurrentTime
   mbTokenUnusedExpiration <- getConfig tokenUnusedTimeout
@@ -821,13 +823,24 @@ checkToken token
       fmap (\(uid, _email, _name, _inst, _roles) -> uid ) <$> getSsoToken token
 checkToken token = fmap (UUID.toText . unUserID . DB.userUuid . snd)
                        <$> getUserByToken token
+
 checkInstance :: InstanceID -> UserID -> API (Maybe DB.UserInstance)
 checkInstance inst user' = runDB $ P.get (DB.UserInstanceKey user' inst)
 
--- checkInstance :: InstanceID ->
-
 logOut :: B64Token -> API ()
-logOut token' = do
+logOut token'
+  | isSsoToken token' = do
+      getSsoToken token' >>= \case
+        Nothing -> return () -- Token is invalid (already logged out?)
+        Just (_uid, email, _name, _inst, _roles) -> do
+          Log.logES Log.Logout{ Log.user = email
+                              , Log.tokenId = 0
+                              }
+          c <- deactivateSsoTokenWhere $
+                 \tok -> tok E.^. DB.SsoTokenToken E.==. val token'
+          when (c > 0)
+            $ audit AuditTokenDeactivated { auditToken = unB64Token token'}
+  | otherwise = do
     mbUser <- getUserByToken token'
     case mbUser of
       Just (tid , usr) -> Log.logES Log.Logout{ Log.user = usr ^. email
@@ -836,9 +849,23 @@ logOut token' = do
       _ -> return ()
     _ <- deactivateTokenWhere (\tok -> tok E.^. DB.TokenToken E.==. val token')
     audit AuditTokenDeactivated { auditToken = unB64Token token'}
--- addUser name password email mbPhone = do
 
+-- Regular users and SSO users are considered distinct, that is, auth-service
+-- does not support federation.
 closeOtherSessions :: B64Token -> API ()
+closeOtherSessions tokenID
+  | isSsoToken tokenID = do
+    cntSso <- deactivateSsoTokenWhere $ \tok -> do
+      andL [ E.exists . E.from $ \token' ->
+              whereL [ tok E.^. DB.SsoTokenUserId
+                       E.==. token' E.^. DB.SsoTokenUserId
+                     , token' E.^. DB.SsoTokenToken
+                       E.==. E.val tokenID
+                     ]
+           , tok E.^. DB.SsoTokenToken E.!=. E.val tokenID
+           ]
+    when (cntSso > 0) $
+      audit AuditOtherTokensDeactivated { auditToken = unB64Token tokenID }
 closeOtherSessions tokenID = do
   cnt <- deactivateTokenWhere $ \tok -> do
     andL [ E.exists . E.from $ \token' ->

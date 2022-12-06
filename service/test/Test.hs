@@ -87,17 +87,20 @@ withUser usr f pool = withRunAPI Prelude.id pool $ \run -> do
     Nothing -> assertFailure "could not create user"
     Just uid -> f uid run
 
+ssoTestUser :: AddUser
+ssoTestUser = testUser & instances .~ [defaultInstance]
+
 withSsoToken :: AddUser
-             -> ((Text, B64Token) -> (API a -> IO a) -> IO ())
+             -> (B64Token -> Text -> (forall a. API a -> IO a) -> IO ())
              -> Case ()
 withSsoToken usr f pool = withRunAPI Prelude.id pool $ \run -> do
-  uid <- fmap UUID.toText $ maybe UUID.nextRandom (return . unUserID) (usr ^. uuid)
-  res <-case usr ^. instances of
+  uid <- UUID.toText <$> maybe UUID.nextRandom (return . unUserID) (usr ^. uuid)
+  res <- case usr ^. instances of
     [iid] -> do
       _ <- run $ addInstance (Just iid) "default instance"
       run $ createSsoToken uid (usr ^. email) (usr ^. name) iid "" (usr ^. roles)
     _ -> fail "No instance ID"
-  f (uid, res ^. token) run
+  f (res ^. token) uid run
 
 withUserOTP ::
      AddUser
@@ -200,7 +203,7 @@ case_changePassword_otp =
       changePassword
         tok
         ChangePassword
-        { changePasswordOldPasword = testUserOtp ^. password
+        { changePasswordOldPassword = testUserOtp ^. password
         , changePasswordNewPassword = "pwd2"
         , changePasswordOtp = Nothing
         }
@@ -212,7 +215,7 @@ case_changePassword_otp =
       changePassword
         tok
         ChangePassword
-        { changePasswordOldPasword = testUserOtp ^. password
+        { changePasswordOldPassword = testUserOtp ^. password
         , changePasswordNewPassword = "pwd2"
         , changePasswordOtp = Just $ Password otp
         }
@@ -467,8 +470,8 @@ case_checkTokenInstance_not_member = withUserToken testUser $ \tok _uid run -> d
 
 
 case_checkSsoTokenInstance :: Case ()
-case_checkSsoTokenInstance = withSsoToken (testUser & instances .~ [defaultInstance])
-  $ \(uid, tok) run -> do
+case_checkSsoTokenInstance = withSsoToken ssoTestUser
+  $ \tok uid run -> do
     res <- run $ checkTokenInstance "" tok defaultInstance
     res `shouldBe` Just ( uid
                         , testUser ^. email, testUser ^. name
@@ -476,8 +479,8 @@ case_checkSsoTokenInstance = withSsoToken (testUser & instances .~ [defaultInsta
                         )
 
 case_checkSsoTokenInstance_wrong_instance :: Case ()
-case_checkSsoTokenInstance_wrong_instance = withSsoToken (testUser & instances .~ [defaultInstance])
-  $ \(uid, tok) run -> do
+case_checkSsoTokenInstance_wrong_instance = withSsoToken ssoTestUser
+  $ \tok _uid run -> do
     res <- run $ checkTokenInstance "" tok
       (InstanceID [uuidQ|37f7b338-1e94-4329-9aad-412caa94f179|])
     res `shouldBe` Nothing
@@ -488,12 +491,73 @@ case_logout = withUserToken testUser $ \tok _uid run -> do
   res <- run $ checkToken tok
   res `shouldBe` Nothing
 
-case_closeOtherSesions :: Case ()
-case_closeOtherSesions = withUserToken testUser $ \tok _uid run -> do
+case_logout_sso :: Case ()
+case_logout_sso = withSsoToken ssoTestUser
+  $ \tok _uid run -> do
+    run $ logOut tok
+    res <- run $ checkToken tok
+    res `shouldBe` Nothing
+
+case_closeOtherSesions_regular_regular :: Case ()
+case_closeOtherSesions_regular_regular = withUserToken testUser $ \tok _uid run -> do
   tok2 <- view token <$> runLogin run testUser
   run $ closeOtherSessions tok2
   res <- run $ checkToken tok
   res `shouldBe` Nothing
+
+case_closeOtherSesions_sso_sso :: Case ()
+case_closeOtherSesions_sso_sso = withSsoToken ssoTestUser $ \tok uid run -> do
+  let usr = ssoTestUser
+      iid = case usr ^. instances of
+              [] -> error "no instances"
+              (iid:_) -> iid
+  res <- run $ createSsoToken uid (usr ^. email) (usr ^. name) iid "" (usr ^. roles)
+  let tok2 = res ^. token
+
+  run $ closeOtherSessions tok2
+
+  res <- run $ checkToken tok
+  res `shouldBe` Nothing
+
+case_closeOtherSesions_sso_regular :: Case ()
+case_closeOtherSesions_sso_regular = withUserToken testUser $ \tok uid run -> do
+  let usr = ssoTestUser
+      uidTxt = UUID.toText $ unUserID uid
+      iid = case usr ^. instances of
+              [] -> error "no instances"
+              (iid:_) -> iid
+  run $ addInstance (Just iid) "default instance"
+  res <- run $ createSsoToken uidTxt (usr ^. email) (usr ^. name) iid "" (usr ^. roles)
+  let tok2 = res ^. token
+
+  -- SSO token
+  run $ closeOtherSessions tok2
+
+  -- Regular token
+  res <- run $ checkToken tok
+  case res of
+    Nothing -> assertFailure "Token was disabled"
+    Just{} -> return ()
+
+case_closeOtherSesions_regular_sso :: Case ()
+case_closeOtherSesions_regular_sso = withUserToken testUser $ \tok uid run -> do
+  let usr = ssoTestUser
+      uidTxt = UUID.toText $ unUserID uid
+      iid = case usr ^. instances of
+              [] -> error "no instances"
+              (iid:_) -> iid
+  run $ addInstance (Just iid) "default instance"
+  res <- run $ createSsoToken uidTxt (usr ^. email) (usr ^. name) iid "" (usr ^. roles)
+  let tok2 = res ^. token
+
+  -- regular token
+  run $ closeOtherSessions tok
+
+  -- SSO token
+  res <- run $ checkToken tok2
+  case res of
+    Nothing -> assertFailure "Token was disabled"
+    Just{} -> return ()
 
 case_closeOtherSesions_same_session :: Case ()
 case_closeOtherSesions_same_session =
@@ -561,8 +625,12 @@ main = withTestDB $ \pool -> do
        , testCase "checkTokenInstance not member"       $ case_checkTokenInstance_not_member        pool
        , testCase "checkSsoTokenInstance"               $ case_checkSsoTokenInstance                pool
        , testCase "checkSsoTokenInstance wronginstance" $ case_checkSsoTokenInstance_wrong_instance pool
-       , testCase "logout"                              $ case_logout                               pool
-       , testCase "closeOtherSesions"                   $ case_closeOtherSesions                    pool
+       , testCase "logout"                              $ case_logout_sso                           pool
+       , testCase "SSO token logout"                    $ case_logout                               pool
+       , testCase "closeOtherSesions regular"           $ case_closeOtherSesions_regular_regular    pool
+       , testCase "closeOtherSesions SSO"               $ case_closeOtherSesions_sso_sso            pool
+       , testCase "closeOtherSesions SSO and regular"   $ case_closeOtherSesions_sso_regular        pool
+       , testCase "closeOtherSesions regular and SSO"   $ case_closeOtherSesions_regular_sso        pool
        , testCase "closeOtherSesions same session"      $ case_closeOtherSesions_same_session       pool
        , adminTests pool
        ]
