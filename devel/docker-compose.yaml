@@ -1,3 +1,6 @@
+# Note: This file is called from the project root directory, all paths are
+# relative to there
+
 version: '3.1'
 
 services:
@@ -28,7 +31,6 @@ services:
       - EMAIL_SMTP=mail
       - EMAIL_PORT=1025
       - EMAIL_PASSWORD=nopasswd
-      - EMAIL_LINK_TEMPLATE=http://localhost/pwreset?token=%s
       - EMAIL_TLS=false
       - EMAIL_AUTH=false
       - SITE_NAME=authservice-test.com
@@ -40,8 +42,10 @@ services:
       - SAML_CONFIG_PATH=/run/saml
 
     volumes:
-      - ./secrets:/run/secrets
+      - ./devel/ephemeral/secrets:/run/secrets
       - ./SAML/config:/run/saml:ro
+      - ./devel/templates/password-reset-email.html.mustache:/app/password-reset-email.html.mustache:ro
+      - ./devel/templates/password-reset-unknown-email.html.mustache:/app/password-reset-unknown-email.html.mustache:ro
     # logging:
     #   driver: gelf
     #   options:

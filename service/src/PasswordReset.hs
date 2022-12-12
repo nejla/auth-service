@@ -17,6 +17,7 @@ import qualified Control.Monad.Catch  as Ex
 import qualified Control.Monad.Logger as Log
 import           Control.Monad.Trans
 import qualified Data.Aeson           as Aeson
+import           Data.Maybe           (fromMaybe)
 import           Data.Monoid
 import           Data.Text            (Text)
 import qualified Data.Text            as Text
@@ -36,9 +37,8 @@ import           Types
 -- | Create an Aeson object from password reset email data
 fromEmailData :: EmailData -> Aeson.Value
 fromEmailData emailData =
-  Aeson.object [ "link" .= (emailData ^. link)
+  Aeson.object [ "token" .= (emailData ^. Types.token)
                , "expirationTime" .= emailData ^. expirationTime
-               , "siteName" .= emailData ^. siteName
                ]
   where
     infix 0 .=
@@ -53,9 +53,8 @@ renderEmail ::
 renderEmail cfg tmpl mbToken =
   let emailData =
         EmailData
-        { emailDataSiteName = cfg ^. siteName
-        , emailDataExpirationTime =  Text.pack $ show $ cfg ^.resetLinkExpirationTime
-        , emailDataLink = maybe "" (cfg ^. mkLink) mbToken
+        { emailDataExpirationTime =  Text.pack $ show $ cfg ^.resetLinkExpirationTime
+        , emailDataToken = fromMaybe "" mbToken
         }
       (warnings, result) = Mustache.renderMustacheW tmpl $ fromEmailData emailData
   in case warnings of

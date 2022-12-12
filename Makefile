@@ -6,6 +6,8 @@ include $(build-env-file)
 
 WEB_IMAGE=$(REGISTRY)/$(WEB_IMAGE_NAME)
 
+COMPOSE=docker-compose -f devel/docker-compose.yaml --project-directory=$(PWD)
+
 .PHONY: all
 all: auth-web.image dist/doc
 	$(MAKE) -C service all
@@ -45,31 +47,31 @@ auth-web.image: $(auth-web-deps)
 
 .PHONY: run
 run: up
-	docker-compose logs --follow
+	$(COMPOSE) logs --follow
 
-dev/ed25519.priv.der:
-	mkdir -p dev
+devel/ephemeral/ed25519.priv.der:
+	mkdir -p devel/ephemeral
 	openssl genpkey -algorithm Ed25519 -outform der \
-	  | base64 > dev/ed25519.priv.der
+	  | base64 > devel/ephemeral/ed25519.priv.der
 
-dev/ed25519.pub.der: dev/ed25519.priv.der
-	base64 -d dev/ed25519.priv.der \
+devel/ephemeral/ed25519.pub.der: devel/ephemeral/ed25519.priv.der
+	base64 -d devel/ephemeral/ed25519.priv.der \
 	  | openssl pkey -inform der -pubout -outform der \
-	  | base64 > dev/ed25519.pub.der
+	  | base64 > devel/ephemeral/ed25519.pub.der
 
-secrets/header_signing_private_key: dev/ed25519.priv.der
-	mkdir -p secrets
-	mkfifo secrets/header_signing_private_key
+devel/ephemeral/secrets/header_signing_private_key: devel/ephemeral/ed25519.priv.der
+	mkdir -p devel/ephemeral/secrets
+	mkfifo devel/ephemeral/secrets/header_signing_private_key
 
 .PHONY: up
-up: service/image auth-web.image dev/ed25519.priv.der dev/ed25519.pub.der secrets/header_signing_private_key
-	cat dev/ed25519.priv.der > secrets/header_signing_private_key &
-	env "AUTHWEBTAG=$$(cat auth-web.image)" docker-compose up -d
+up: service/image auth-web.image devel/ephemeral/ed25519.priv.der devel/ephemeral/ed25519.pub.der devel/ephemeral/secrets/header_signing_private_key
+	cat devel/ephemeral/ed25519.priv.der > devel/ephemeral/secrets/header_signing_private_key &
+	env "AUTHWEBTAG=$$(cat auth-web.image)" $(COMPOSE) up -d
 
 .PHONY: down
 down:
-	docker-compose kill -s 9
-	docker-compose down --remove-orphans -v
+	$(COMPOSE) kill -s 9
+	$(COMPOSE) down --remove-orphans -v
 
 .PHONY: push
 push:
@@ -85,6 +87,5 @@ push-latest:
 .PHONY: clean
 clean:
 	$(MAKE) -C service clean
-	rm -rf dev
-	rm -rf secrets
-	rm auth-web.image
+	rm -rf devel/ephemeral
+	rm -f auth-web.image

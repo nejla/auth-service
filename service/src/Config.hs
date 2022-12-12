@@ -15,39 +15,40 @@ module Config
   , module Config
   ) where
 
-import           Control.Lens             ((^.))
-import           Control.Monad            (when)
-import qualified Control.Monad.Catch      as Ex
+import           Control.Lens                     ((^.))
+import           Control.Monad                    (when)
+import qualified Control.Monad.Catch              as Ex
 import           Control.Monad.Logger
 import           Control.Monad.Trans
-import qualified Data.Aeson               as Aeson
-import qualified Data.ByteString          as BS
-import qualified Data.ByteString.Char8    as BS8
-import qualified Data.Char                as Char
-import qualified Data.Configurator.Types  as Conf
-import           Data.Default             (def)
-import           Data.Maybe               (maybeToList)
-import qualified Data.Text                as Text
-import qualified Data.Text.Encoding       as Text
-import           Data.Text.Encoding.Error (lenientDecode)
-import qualified Data.Text.Lazy           as LText
-import qualified Data.Text.Lazy.IO        as LText
-import           Data.UUID                (UUID)
-import qualified Data.UUID                as UUID
-import qualified Network.Mail.Mime        as Mail
+import qualified Data.Aeson                       as Aeson
+import qualified Data.ByteString                  as BS
+import qualified Data.ByteString.Char8            as BS8
+import qualified Data.Char                        as Char
+import qualified Data.Configurator.Types          as Conf
+import           Data.Default                     (def)
+import           Data.Maybe                       (maybeToList)
+import           Data.String.Interpolate.IsString (i)
+import qualified Data.Text                        as Text
+import qualified Data.Text.Encoding               as Text
+import           Data.Text.Encoding.Error         (lenientDecode)
+import qualified Data.Text.Lazy                   as LText
+import qualified Data.Text.Lazy.IO                as LText
+import           Data.UUID                        (UUID)
+import qualified Data.UUID                        as UUID
+import qualified Network.Mail.Mime                as Mail
 import qualified SignedAuth
-import           System.Exit              (exitFailure)
-import qualified System.Exit              as Exit
-import           System.IO                (hPutStrLn, stderr)
-import           System.IO.Error          (isDoesNotExistError, isPermissionError)
-import qualified System.Posix.Files       as Posix
-import qualified Text.Microstache         as Mustache
+import           System.Exit                      (exitFailure)
+import qualified System.Exit                      as Exit
+import           System.IO                        (hPutStrLn, stderr)
+import           System.IO.Error                  (isDoesNotExistError, isPermissionError)
+import qualified System.Posix.Files               as Posix
+import qualified Text.Microstache                 as Mustache
 import qualified Twilio
 
 import           Types
 import           Util
 
-import           NejlaCommon.Config       hiding (Config)
+import           NejlaCommon.Config               hiding (Config)
 import           SAML.Config
 
 --------------------------------------------------------------------------------
@@ -181,25 +182,45 @@ getAuthServiceConfig conf = do
 
 getSecrets :: (MonadIO m, MonadLogger m) => Conf.Config -> m Secrets
 getSecrets conf = do
-  signedHeaderKeyPath <-
-    getConf "SIGNED_HEADERS_PRIVATE_KEY_PATH" "signed-headers.private-key-path"
-      (Right "/run/secrets/header_signing_private_key") conf
-  signedHeaderKey <- readSignedHeaderKey $ Text.unpack signedHeaderKeyPath
-  serviceToken <-
-    getConf "SERVICE_TOKEN" "service-token"
-      (Left "Secret token for between-service communication") conf
+  mbSignedHeaderKeyPath <-
+    getConfMaybe "SIGNED_HEADERS_PRIVATE_KEY_PATH" "signed-headers.private-key-path"
+                 conf
+  signedHeaderKey <-
+    case mbSignedHeaderKeyPath of
+      Nothing -> do
+        (privateKey, _publicKey) <- liftIO SignedAuth.mkKeys
+        $logInfo "SIGNED_HEADERS_PRIVATE_KEY_PATH not set, generating random key"
+        return privateKey
+      Just signedHeaderKeyPath ->
+        readSignedHeaderKey $ Text.unpack signedHeaderKeyPath
+  serviceToken <- getConfMaybe "SERVICE_TOKEN" "service-token" conf
   return Secrets { secretsHeaderPrivateKey = signedHeaderKey
                  , secretsServiceToken = serviceToken
                  }
 
--- Default template loaded from src/password-reset-email-template.html.mustache
-defaultPwResetTemplate :: Mustache.Template
-defaultPwResetTemplate =
-  $(htmlTemplate "password-reset-email-template.html.mustache")
-
-defaultPwResetUnknownTemplate :: Mustache.Template
-defaultPwResetUnknownTemplate =
-  $(htmlTemplate "password-reset-unknown-email-template.html.mustache")
+tryReadMustacheFile :: MonadIO m => FilePath -> m Mustache.Template
+tryReadMustacheFile path = liftIO $ do
+  Ex.catches (Mustache.compileMustacheFile path)
+    [ Ex.Handler $ \(e :: IOError) -> do
+      if
+        | isDoesNotExistError e  ->
+            hPutStrLn stderr
+              [i|#{path} does not exist. Please create it before starting.|]
+        | isPermissionError e ->
+            hPutStrLn stderr
+              [i|Permission error reading #{path}. Please check file permissions.|]
+        | otherwise ->
+            hPutStrLn stderr [i|#{path} could not be read. Encountered error: #{e}.|]
+      exitFailure
+    , Ex.Handler $ \case
+        (Mustache.MustacheParserException parseError) -> do
+          hPutStrLn stderr
+           [i|Could not parse template file #{path}: encountered error: #{parseError}|]
+          exitFailure
+        _ -> do
+          hPutStrLn stderr [i|Could not parse template file #{path}|]
+          exitFailure
+    ]
 
 
 setEmailConf :: (MonadIO m, MonadLogger m) => Conf.Config -> m (Maybe EmailConfig)
@@ -225,28 +246,11 @@ setEmailConf conf =
           "email.link-expiration-time"
           (Right 24)
           conf
-      mbEmailConfigTemplatefile <-
-        getConfMaybe "EMAIL_TEMPLATE" "email.template" conf
       emailConfigPWResetTemplate <-
-        case mbEmailConfigTemplatefile of
-          Nothing -> return defaultPwResetTemplate
-          Just filename ->
-            liftIO . Mustache.compileMustacheFile $ Text.unpack filename
-      mbEmailConfigUnknownTemplatefile <-
-        getConfMaybe "EMAIL_UNKNOWN_TEMPLATE" "email.unknown-template" conf
+        tryReadMustacheFile "/app/password-reset-email.html.mustache"
       emailConfigPWResetUnknownTemplate <-
-        case mbEmailConfigUnknownTemplatefile of
-          Nothing -> return defaultPwResetUnknownTemplate
-          Just filename ->
-            liftIO . Mustache.compileMustacheFile $ Text.unpack filename
-      emailConfigLinkTemplate <-
-        getConf
-          "EMAIL_LINK_TEMPLATE"
-          "email.link-template"
-          (Left "Password reset email link template")
-          conf
-      let emailConfigMkLink =
-            \tok -> Text.replace "%s" tok emailConfigLinkTemplate
+        tryReadMustacheFile "/app/password-reset-unknown-email.html.mustache"
+
       sendmailCommand <-
         getConfMaybe "SENDMAIL_PROGRAM" "email.sendmail-program" conf
       emailConfigTls <- getConfBool "EMAIL_TLS" "email.tls" (Right True) conf

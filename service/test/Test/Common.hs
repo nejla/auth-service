@@ -41,16 +41,14 @@ testEmailConfig =
   , emailConfigFrom     = "testuser@localhost"
   , emailConfigUser     = "testuser"
   , emailConfigPassword = "pwd"
-  , emailConfigPWResetTemplate = tmpl "please click on {{link}}"
+  , emailConfigPWResetTemplate = tmpl "please click on http://localhost/reset?token={{token}}"
   , emailConfigPWResetUnknownTemplate = tmpl "Your email is unknown"
   , emailConfigSendmail =
       SendmailConfig
       { sendmailConfigPath = "/usr/bin/cat"
       , sendmailConfigArguments = []
       }
-  , emailConfigSiteName = "Test Site"
   , emailConfigResetLinkExpirationTime = 24
-  , emailConfigMkLink = ("http://localhost/reset?token=" <>)
   }
   where
     tmpl x = case Mustache.compileMustacheText "email template" x of
@@ -94,7 +92,7 @@ mkConfig pool = do
           , configSamlConfig = Nothing
           }
         secrets = Secrets { secretsHeaderPrivateKey = privateKey
-                          , secretsServiceToken = ""
+                          , secretsServiceToken = Nothing
                           }
     return (conf, secrets)
   where

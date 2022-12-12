@@ -323,10 +323,8 @@ If the `EMAIL_FROM` option is set, the e-mail functionality is enabled and a num
 | `EMAIL_PASSWORD`             | If `EMAIL_FROM` is set | String                      | Unset                | SMTP password to use for sending e-mail.                                                                                                            |
 | `EMAIL_SMTP`                 | If `EMAIL_FROM` is set | String                      | Unset                | SMTP server to use for sending e-mail.                                                                                                              |
 | `EMAIL_USER`                 | If `EMAIL_FROM` is set | String                      | Unset                | SMTP user name to use for sending e-mail.                                                                                                           |
-| `SITE_NAME`                  | If `EMAIL_FROM` is set | String                      | Unset                | Displayed name of your application used in password reset e-mails. Can for example be the name of your application or your application's hostname.  |
 | `EMAIL_AUTH`                 | No                     | Boolean (`true` or `false`) | `true`               | Whether to authenticate to the SMTP server.                                                                                                         |
 | `EMAIL_FROM_NAME`            | No                     | String                      | Unset                | Human-visible name of the sender.                                                                                                                   |
-| `EMAIL_LINK_TEMPLATE`        | Yes                    | String                      | Unset                | Template to generate links from password reset tokens (e.g. `https://my-app.example.com/reset-password?token=%s`). `%s` is replaced with the token. |
 | `EMAIL_PORT`                 | No                     | Integer                     | `25`                 | SMTP server port to use for sending e-mail.                                                                                                         |
 | `EMAIL_TLS`                  | No                     | Boolean (`true` or `false`) | `true`               | Whether to use TLS to connect to the SMTP server.                                                                                                   |
 | `RESET_LINK_EXPIRATION_TIME` | No                     | Integer                     | `24`                 | Time in hours before password reset links expire.                                                                                                   |
@@ -334,17 +332,71 @@ If the `EMAIL_FROM` option is set, the e-mail functionality is enabled and a num
 
 A password reset e-mail request will always succeed, even if the e-mail address does not belong to an auth-service user, in order to prevent oracle attacks.
 
-By default, the following two e-mail templates are used:
+auth-service will look for the following two e-mail templates:
 
-- [`service/src/html/password-reset-email-template.html.mustache`](service/src/html/password-reset-email-template.html.mustache)
-- [`service/src/html/password-reset-unknown-email-template.html.mustache`](service/src/html/password-reset-unknown-email-template.html.mustache)
+- `/app/password-reset-email.html.mustache.mustache`
+- `/app/password-reset-unknown-email.html.mustache`
 
-However, you can provide your own by voluming in Mustache files into the `/app` directory in the auth-server-backend container. Using Docker Compose that can be done like so:
+You must provide these files (if `EMAIL_FROM` is set) by voluming them into the `/app` directory in the auth-server-backend container. Using Docker Compose that can be done like so:
 
 ```yaml
     volumes:
-      - ./password-reset-email-template.html.mustache:/app/password-reset-email-template.html.mustache:ro
-      - ./password-reset-unknown-email-template.html.mustache:/app/password-reset-unknown-email-template.html.mustache.mustache:ro
+      - ./password-reset-email.html.mustache.mustache:/app/password-reset-email.html.mustache:ro
+      - ./password-reset-unknown-email.html.mustache:/app/password-reset-unknown-email.html.mustache:ro
+```
+
+Here is an example of `password-reset-email.html.mustache.mustache` (`%s` is
+replaced with the token):
+
+```html
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Your Password Reset</title>
+    <meta content="initial-scale=1, width=device-width" name="viewport">
+  </head>
+  <body>
+    <h1>Your Password Reset</h1>
+    <p>
+      You requested a password reset for <b>Example App</b>. To complete the
+      reset please follow this link:
+    </p>
+    <p>
+      <a href="https://my-app.example.com/reset-password?token={{token}}">
+        https://my-app.example.com/reset-password?token={{token}}
+      </a>
+    </p>
+    <p>The link will be valid for {{expirationTime}} hours.</p>
+    <p>
+      If you didn't request a password reset you can safely ignore this message.
+    </p>
+  </body>
+</html>
+```
+
+Here is an example of `password-reset-unknown-email.html.mustache`:
+
+```html
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Password Reset Attempt</title>
+    <meta content="initial-scale=1, width=device-width" name="viewport">
+  </head>
+  <body>
+    <h1>Password Reset Attempt</h1>
+    <p>
+      You requested a password reset for <b>Example App</b> but this e-mail
+      address is not known to our system. Please try a different e-mail address
+      or contact support.
+    </p>
+    <p>
+      If you didn't request a password reset you can safely ignore this message.
+    </p>
+  </body>
+</html>
 ```
 
 There are three endpoints that can be used for password resets:

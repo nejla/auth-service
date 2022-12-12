@@ -99,9 +99,7 @@ data EmailConfig = EmailConfig
   , emailConfigPWResetTemplate :: Mustache.Template
   , emailConfigPWResetUnknownTemplate :: Mustache.Template
   , emailConfigSendmail :: SendmailConfig
-  , emailConfigSiteName :: Text
   , emailConfigResetLinkExpirationTime :: Int -- ^ Time in hours
-  , emailConfigMkLink :: PwResetToken -> Text -- ^ Generate a link from a token
   }
 
 type OtpHandler = Phone -> Text -> LoggingT IO ()
@@ -151,14 +149,13 @@ data Config = Config
 data Secrets =
   Secrets
     { secretsHeaderPrivateKey     :: SignedAuth.PrivateKey
-    , secretsServiceToken         :: Text
+    , secretsServiceToken         :: Maybe Text
     }
 
 -- | Necessary data to fill in a password reset email
 data EmailData =
   EmailData
-  { emailDataSiteName       :: Text
-  , emailDataLink           :: Text
+  { emailDataToken          :: Text
   , emailDataExpirationTime :: Text
   } deriving (Show)
 

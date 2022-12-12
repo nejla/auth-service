@@ -10,7 +10,6 @@
 
 module Main where
 
-
 import           Control.Lens
 import qualified Control.Monad.Catch     as Ex
 import           Control.Monad.Logger
@@ -34,7 +33,6 @@ import           Test.Tasty.QuickCheck
 import qualified Text.Microstache        as Mustache
 
 import           Backend
-import           Config                  (defaultPwResetTemplate)
 import           Monad
 import           PasswordReset
 import qualified Persist.Schema          as DB
@@ -269,9 +267,8 @@ case_reset_password_expired =
 testEmailData :: EmailData
 testEmailData =
   EmailData
-  { emailDataLink = "http://localhost/reset/abc"
-  , emailDataSiteName = "test.site.com"
-  , emailDataExpirationTime = "24 hours"
+  { emailDataToken = "abc"
+  , emailDataExpirationTime = "24"
   }
 
 case_password_reset_render_email :: Case ()
@@ -305,14 +302,6 @@ case_password_reset_render_email_errors _pool = do
                Left e -> error $ show e
   runNoLoggingT (renderEmail testEmailConfig tmpl Nothing)
     `shouldThrow` (== EmailRenderError)
-
--- Check that we can render the default template (i.e. there are no missing
--- variables)
-case_password_reset_default_template :: Case ()
-case_password_reset_default_template _pool = do
-  _ <-
-    runStderrLoggingT $ renderEmail testEmailConfig defaultPwResetTemplate Nothing
-  return ()
 
 --------------------------------------------------------------------------------
 -- Instances
@@ -611,7 +600,6 @@ main = withTestDB $ \pool -> do
        , testCase "password reset render email"         $ case_password_reset_render_email          pool
        , testCase "password reset render error email"   $ case_password_reset_render_error_email    pool
        , testCase "password reset render email error"   $ case_password_reset_render_email_errors   pool
-       , testCase "password reset default template"     $ case_password_reset_default_template      pool
        , testCase "add user instance"                   $ case_add_user_instance                    pool
        , testCase "remove user instance"                $ case_remove_user_instance                 pool
        , testCase "login"                               $ case_login                                pool

@@ -1,13 +1,14 @@
-{-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Api where
 
@@ -16,22 +17,17 @@ import           Control.Lens                     hiding (Context)
 import qualified Control.Monad.Catch              as Ex
 import           Control.Monad.Except
 import           Data.Aeson                       (encode)
-import           Data.ByteString                  (ByteString)
-import qualified Data.ByteString                  as BS
 import qualified Data.List                        as List
-import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as Map
 import           Data.Maybe                       (fromMaybe, maybeToList)
 import           Data.String.Interpolate.IsString (i)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding               as Text
-import           Data.UUID                        (UUID)
 import qualified Data.UUID                        as UUID
 import           Database.Persist.Sql
 import qualified NejlaCommon                      as NC
 import           Network.Wai
-import qualified Network.Wai.SAML2                as SAML
 import           Servant
 import qualified SignedAuth
 import           Types
@@ -45,8 +41,6 @@ import           AuthService.Api
 import           Monad
 import qualified SAML
 import           SignedAuth.Headers               (JWS(..))
-
-import qualified Network.Wai.SAML2                as SAML
 
 --------------------------------------------------------------------------------
 -- Api -------------------------------------------------------------------------
@@ -150,7 +144,7 @@ serveSSOLoginAPI pool st (Just inst) = do
         addHeader @"Location" ([i|#{baseUrl}?#{param}|] :: Text)
         $ addHeader @"Cache-Control" ("no-cache, no-store" :: Text)
         $ addHeader @"Pragma" ("no-cache" :: Text)
-        $ NoContent
+          NoContent
 
 
 serveLogout :: ConnectionPool -> ApiState -> Server LogoutAPI
@@ -280,9 +274,8 @@ serveGetUsersByRoles :: ConnectionPool
                      -> Maybe B64Token
                      -> Server GetUsersByRolesAPI
 serveGetUsersByRoles pool conf tok role = do
-  isAdmin "get users by role" pool conf tok
+  _ <- isAdmin "get users by role" pool conf tok
   liftHandler $ runAPI pool conf $ getUsersByRole role
-
 
 serveDeactivateUsersAPI :: ConnectionPool
                         -> ApiState
@@ -420,19 +413,24 @@ serveGetUsers pool conf check uids = check $ do
 -- Interface -------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-serveServiceAPI :: (HasServiceToken s Text) =>
-                   ConnectionPool
+serveServiceAPI :: ConnectionPool
                 -> ApiState
-                -> s
+                -> Secrets
                 -> Server ServiceAPI
 serveServiceAPI pool conf secrets token = do
   serveGetUsers pool conf checkServiceApi
   where
+    -- We could check the token first and then pass the request to the handler,
+    -- but then we would get 403 errors even when 404 is more appropriate
     checkServiceApi :: forall a. Handler a -> Handler a
-    checkServiceApi f = if token == Just (secrets ^. serviceToken)
-    then f
-    else throwError err403
-
+    checkServiceApi f =
+      case secrets ^. serviceToken of
+        Nothing -> do
+          liftIO . runAPI pool conf $ logWarn "Service token not configured"
+          throwError err404
+        Just st -> if token == Just st
+                   then f
+                   else throwError err403
 
 serveAPI ::
      ConnectionPool
