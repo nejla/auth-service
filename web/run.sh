@@ -1,13 +1,13 @@
 #!/bin/sh
 
-COOKIE=$(echo "$COOKIE" | tr '[:upper:]' '[:lower:]')
+SESSION_COOKIES=$(echo "$SESSION_COOKIES" | tr '[:upper:]' '[:lower:]')
 
-if [ "$COOKIE" = "session" ]; then
-  PARAM_COOKIE="-DCOOKIE=session"
-elif [ -z "$COOKIE" ] || [ "$COOKIE" = "permanent" ] ; then
-  PARAM_COOKIE="-DCOOKIE=permanent"
+if [ "$SESSION_COOKIES" = "true" ]; then
+  PARAM_SESSION_COOKIES="-DSESSION_COOKIES=true"
+elif [ -z "$SESSION_COOKIES" ] || [ "$SESSION_COOKIES" = "false" ] ; then
+  PARAM_SESSION_COOKIES="-DSESSION_COOKIES=false"
 else
-    echo "COOKIE variable must be one of 'session' or 'permanent'"
+    echo "SESSION_COOKIES variable must be one of 'true' or 'false'"
     exit 1
 fi
 
@@ -19,7 +19,7 @@ fi
 
 
 m4 -DAUTH_SERVICE=auth-service:80 \
-   "$PARAM_COOKIE" \
+   "$PARAM_SESSION_COOKIES" \
    "$PARAM_RATELIMIT" \
    /nginx.conf.m4 \
    > /etc/nginx/nginx.conf

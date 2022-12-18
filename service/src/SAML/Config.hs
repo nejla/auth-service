@@ -13,7 +13,7 @@ import qualified Data.ByteString                  as BS
 import qualified Data.Configurator.Types          as Config
 import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (catMaybes)
+import           Data.Maybe                       (catMaybes, fromMaybe)
 import           Data.String.Interpolate.IsString (i)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
@@ -61,7 +61,7 @@ getSamlConfig base inst = do
   let conffilePath = path </> "config"
   conf <- readConfigFile conffilePath
   samlInstanceConfigAudience <- get "audience" conf
-  let samlInstanceConfigRedirectAfterLogin = Map.lookup "redirect_after_login" conf
+  let samlInstanceConfigRedirectAfterLogin = fromMaybe "/" $ Map.lookup "redirect_after_login" conf
   samlInstanceConfigInstance <- get "instance" conf >>= \instTxt ->
     case UUID.fromText instTxt of
       Nothing -> do

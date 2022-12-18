@@ -70,8 +70,7 @@ services:
       # Link upstream containers to their instance IDs
       - upstream:de305d54-75b4-431b-adb2-eb6b9e546014
     environment:
-  #   - COOKIE=session
-      - COOKIE=permanent
+      # - SESSION_COOKIES=false
       - NORATELIMIT=true
     networks:
       - auth-service

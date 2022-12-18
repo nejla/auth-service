@@ -8,20 +8,17 @@
 ### Creating client
  * Configure -> Clients -> Create
  * Client id: authservice (or the name of the SP)
-   * This has to match the `SAML_AUDIENCE` setting
+   * This has to match the instance's `audience` setting
  * Client protocol: SAML
 
 ### Minimal changes from default settings
  * root url (e.g. `http://localhost:8000/` for the example)
+ * Master SAML processing URL  (e.g. `http://localhost:8000/api/sso/assert`)
  * Under Keys:
  * Client Signature required: OFF
    * wai-saml2 doesn't handle client requests
    * Not implemented in auth-service
    * Leads to error: "Invalid requester"
- * Encrypt Assertions: ON
-   * Required by wai-saml2
-   * See https://github.com/mbg/wai-saml2/issues/5
-   * See next section
 
 ### Generating and installing encryption key
   * This generates the RSA encryption key pair belonging to the client (auth-service)
@@ -35,7 +32,7 @@
   * Realm Settings
   * Tab "Keys" -> "Active"
   * Under "Algorithm": `RS256`, "Use": `Sig`
-  * Chose "Certificate", copy/paste and save under `SAML/config/{instance name}/certcertificate.pem`
+  * Chose "Certificate", copy/paste and save under `SAML/config/{instance name}/certificate.pem`
   * Add PEM markers:
 ```
 -----BEGIN CERTIFICATE-----
@@ -70,19 +67,15 @@ that should have SAML enabled.
     signed assertions. (the "realm certificate")
   * `config`: a simple "key=value" encoded configuration for the instance, with
     the following fields:
-    * `audience`: the audience for SAML assertions (has to match the client name
-      in keycloak or other IdPs)
-    * `idp_request_url`: The IdP's URL for authentication requests
-    * `instance`: The auth-service instance this configuration applies
-      to. Please note that each instance can only have **one** SAML
-      configuration, multiple configurations will overwrite each other in an
-      unspecified order.
-    * `redirect_after_login`: URL to redirect after SAML login succeeds
-    * `allow_unencrypted_assertions`: Accept unencrypted assertions from the IdP
-      (encrypted assertions are always accepted). Note that the encryption key
-      still needs to be set.
-    * `allow_unsolicited_responses`: Accept unsolicited auth responses,
-      e.g. IdP-initiated SSO.
+
+|Option|Required|Type|Default|Description|
+|------|--------|----|-------|-----------|
+|`audience`| **Yes**| String|| The audience for SAML assertions (has to match the client name in keycloak or other IdPs)|
+|`idp_request_url`|**Yes**|String|| The IdP's URL for authentication requests|
+|`instance`| **Yes**| String|| The auth-service instance this configuration applies to. Please note that each instance can only have **one** SAML configuration, multiple configurations will overwrite each other in an unspecified order.|
+|`redirect_after_login`| No| String| `/`| URL to redirect after SAML login succeeds|
+|`allow_unencrypted_assertions`| No| Boolean| false| Accept unencrypted assertions from the IdP (encrypted assertions are always accepted). Note that the encryption key still needs to be set.|
+|`allow_unsolicited_responses`| No| Boolean| false| Accept unsolicited auth responses,e.g. IdP-initiated SSO.|
 
 Example for the `config` file:
 ```

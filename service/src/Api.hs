@@ -118,7 +118,7 @@ serveSSOAssertAPI pool st (Just inst) samlResponse = do
       case res of
         Left _ -> throwError err403
         Right rl ->
-          let loc = fromMaybe "/" $ samlInstanceConfigRedirectAfterLogin samlConfig'
+          let loc = samlInstanceConfigRedirectAfterLogin samlConfig'
           in return ( addHeader @"X-Token" (returnLoginToken rl)
                     $ addHeader @"Location" loc
                       rl

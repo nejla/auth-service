@@ -97,7 +97,7 @@ http {
                 proxy_set_header Accept application/json;
         }
 
-        define(`expire', `ifelse(COOKIE, `permanent', `; Expires=Fri, 01-Jan-2038 00:00:01 GMT;')')
+        define(`expire', `ifelse(SESSION_COOKIES, `false', `; Expires=Fri, 01-Jan-2038 00:00:01 GMT;')')
         location = /login {
                 ifdef(`NORATELIMIT', `', `
                 limit_req zone=login burst=10 nodelay;')

@@ -118,7 +118,7 @@ data SamlInstanceConfig =
   , samlInstanceConfigAudience :: Text
   , samlInstanceConfigInstance :: InstanceID
   , samlInstanceConfigIdPBaseUrl :: Text
-  , samlInstanceConfigRedirectAfterLogin :: Maybe Text
+  , samlInstanceConfigRedirectAfterLogin :: Text
   , samlInstanceConfigAllowUnsolicited :: Bool
   } deriving Show
 
