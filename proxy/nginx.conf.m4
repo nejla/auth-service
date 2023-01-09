@@ -9,9 +9,10 @@
 #    nginx.conf.m4 \
 #    > nginx.conf
 #
-# As part of the auth-web container, parameters are set in the run.sh script
-# That is, variables like NORATELIMIT you see in here are NOT environment variables
-# but are instead explicitly set in run.sh. See run.sh for more details
+# As part of the auth-service-proxy container, parameters are set in the run.sh
+# script. That is, variables like NORATELIMIT you see in here are NOT
+# environment variables but are instead explicitly set in run.sh. See run.sh for
+# more details.
 
 worker_processes 1;
 

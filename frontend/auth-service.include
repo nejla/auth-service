@@ -1,20 +1,20 @@
         location = /auth-service.js {
-            proxy_pass http://auth-web/auth-service.js;
+            proxy_pass http://auth-service-proxy/auth-service.js;
         }
         location /auth/ {
             index index.html;
-            proxy_pass http://auth-web/authentication/;
+            proxy_pass http://auth-service-proxy/authentication/;
             proxy_pass_request_body off;
             proxy_set_header Content-Length "";
             proxy_set_header X-Original-URI $request_uri;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-for $proxy_add_x_forwarded_for;
-            proxy_redirect http://auth-web/ /;
+            proxy_redirect http://auth-service-proxy/ /;
         }
         location /api/ {
             proxy_set_header X-Original-URI $request_uri;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_pass http://auth-web/;
+            proxy_pass http://auth-service-proxy/;
 
         }

@@ -4,12 +4,12 @@ build-env-file=$(env-file)
 endif
 include $(build-env-file)
 
-WEB_IMAGE=$(REGISTRY)/$(WEB_IMAGE_NAME)
+PROXY_IMAGE=$(REGISTRY)/$(PROXY_IMAGE_NAME)
 
 COMPOSE=docker-compose -f devel/docker-compose.yaml --project-directory=$(PWD)
 
 .PHONY: all
-all: auth-web.image dist/doc
+all: auth-service-proxy.image dist/doc
 	$(MAKE) -C service all
 
 .PHONY: dist/doc
@@ -39,11 +39,11 @@ systemtests: up
 	tests/test dockertest
 	$(MAKE) down
 
-auth-web-deps := $(shell find web)
+auth-service-proxy-deps := $(shell find proxy)
 
-auth-web.image: $(auth-web-deps)
-	docker build -t $(WEB_IMAGE):$(TAG) web
-	echo -n "$(TAG)" > auth-web.image
+auth-service-proxy.image: $(auth-service-proxy-deps)
+	docker build -t $(PROXY_IMAGE):$(TAG) proxy
+	echo -n "$(TAG)" > auth-service-proxy.image
 
 .PHONY: run
 run: up
@@ -64,9 +64,9 @@ devel/ephemeral/secrets/header_signing_private_key: devel/ephemeral/ed25519.priv
 	mkfifo devel/ephemeral/secrets/header_signing_private_key
 
 .PHONY: up
-up: service/image auth-web.image devel/ephemeral/ed25519.priv.der devel/ephemeral/ed25519.pub.der devel/ephemeral/secrets/header_signing_private_key
+up: service/image auth-service-proxy.image devel/ephemeral/ed25519.priv.der devel/ephemeral/ed25519.pub.der devel/ephemeral/secrets/header_signing_private_key
 	cat devel/ephemeral/ed25519.priv.der > devel/ephemeral/secrets/header_signing_private_key &
-	env "AUTHWEBTAG=$$(cat auth-web.image)" $(COMPOSE) up -d
+	env "PROXY_TAG=$$(cat auth-service-proxy.image)" $(COMPOSE) up -d
 
 .PHONY: down
 down:
@@ -76,16 +76,16 @@ down:
 .PHONY: push
 push:
 	$(MAKE) -C service push
-	docker push $(WEB_IMAGE):$(TAG)
+	docker push $(PROXY_IMAGE):$(TAG)
 
 .PHONY: push-latest
 push-latest:
 	$(MAKE) -C service push-latest
-	docker tag $(WEB_IMAGE):$(TAG) $(WEB_IMAGE):latest
-	docker push $(WEB_IMAGE):latest
+	docker tag $(PROXY_IMAGE):$(TAG) $(PROXY_IMAGE):latest
+	docker push $(PROXY_IMAGE):latest
 
 .PHONY: clean
 clean:
 	$(MAKE) -C service clean
 	rm -rf devel/ephemeral
-	rm -f auth-web.image
+	rm -f auth-service-proxy.image

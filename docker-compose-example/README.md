@@ -24,8 +24,8 @@ now be started:
 $ docker ps
 CONTAINER ID   IMAGE                            COMMAND                  CREATED          STATUS                    PORTS                                   NAMES
 7aeb97d423f6   nginx                            "/docker-entrypoint.…"   2 seconds ago    Up 1 second (healthy)     0.0.0.0:8080->80/tcp, :::8080->80/tcp   docker-compose-example_proxy_1
-5ca3b1c8de44   nejla/auth-web                   "/docker-entrypoint.…"   4 seconds ago    Up 3 seconds (healthy)    80/tcp, 443/tcp                         docker-compose-example_auth-service-web_1
-498f6922a3fd   nejla/auth-service               "auth-service run"       35 seconds ago   Up 35 seconds (healthy)   80/tcp                                  docker-compose-example_auth-service-service_1
+5ca3b1c8de44   nejla/auth-service-proxy         "/docker-entrypoint.…"   4 seconds ago    Up 3 seconds (healthy)    80/tcp, 443/tcp                         docker-compose-example_auth-service-web_1
+498f6922a3fd   nejla/auth-service-backend       "auth-service run"       35 seconds ago   Up 35 seconds (healthy)   80/tcp                                  docker-compose-example_auth-service-service_1
 51569032e3bc   postgres                         "docker-entrypoint.s…"   38 seconds ago   Up 37 seconds (healthy)   5432/tcp                                docker-compose-example_auth-service-database_1
 70f795f7afa5   docker-compose-example_backend   "docker-entrypoint.s…"   38 seconds ago   Up 37 seconds (healthy)   3000/tcp                                docker-compose-example_backend_1
 ```

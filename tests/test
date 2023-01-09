@@ -27,9 +27,9 @@ DB_CONTAINER=auth-service_database_1
 DB_HOST=database
 DB_USER=postgres
 DB_DATABASE=postgres
-WEB_HOST=localhost:8000
+PROXY_HOST=localhost:8000
 EMAIL_HOST=localhost:8025
-API=$WEB_HOST/api
+API=$PROXY_HOST/api
 EMAIL_API=$EMAIL_HOST/api/v1
 USER=user1@example.com
 PASSWORD=pwd123
@@ -255,7 +255,7 @@ runtest() {
 }
 
 check_connection() {
-    res=$(curl "$WEB_HOST" --silent -o /dev/null -w "%{http_code}")
+    res=$(curl "$PROXY_HOST" --silent -o /dev/null -w "%{http_code}")
     [[ $res = 200 ]]
 }
 
@@ -317,11 +317,11 @@ docker_test() {
     [[ $RES == "403" ]] || fail "Did not get authorization denied, instead got $RES"
 
     testing "Trying / without a token"
-    RES=$($CURL http://$WEB_HOST/ )
+    RES=$($CURL http://$PROXY_HOST/ )
     [[ $RES == "Authenticate!" ]]  || fail "Did not get redirect , instead got $RES"
 
     testing "Trying /auth/index.html"
-    RES=$($CURL http://$WEB_HOST/auth/index.html)
+    RES=$($CURL http://$PROXY_HOST/auth/index.html)
     [[ $RES == "Authenticate!" ]] || fail "Did not get auth.html, instead got $RES"
 
     testing "Trying /auth/index.html with token"
@@ -329,7 +329,7 @@ docker_test() {
                 -w "%{http_code}" \
                 -H "X-Instance: $INSTANCE" \
                 --cookie "token=$TOKEN" \
-                http://$WEB_HOST/auth/index.html)
+                http://$PROXY_HOST/auth/index.html)
     [[ $RES == "303" ]] || fail "Did not get redirect, instead got $RES"
 
     testing "Trying to get user info"
@@ -341,7 +341,7 @@ docker_test() {
     RES=$($CURL -I \
                 --cookie "token=$TOKEN" \
                 -H "X-Instance: $INSTANCE" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     ETAG=$(echo "$RES" | tr -d '\r' | awk 'BEGIN {FS=": "}/^ETag/{print $2}')
     LASTMOD=$(echo "$RES" \
@@ -357,7 +357,7 @@ docker_test() {
                 -H "If-Modified-Since: $LASTMOD" \
                 -o /dev/null \
                 -w "%{http_code}" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     [[ $RES == "304" ]] || fail "If-Modified-Since did not result in 304, got $RES instead"
 
@@ -367,7 +367,7 @@ docker_test() {
                 -H "If-None-Match: $ETAG" \
                 -o /dev/null \
                 -w "%{http_code}" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     [[ $RES == "304" ]] || fail "If-None-Match did not result in 304, got $RES instead"
 
@@ -377,7 +377,7 @@ docker_test() {
                 -H "If-None-Match: \"bogus\"" \
                 -o /dev/null \
                 -w "%{http_code}" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     [[ $RES == "200" ]] || fail "If-None-Match did not result in 304, got $RES instead"
 
@@ -388,13 +388,13 @@ docker_test() {
                 -H "If-None-Match: $ETAG" \
                 -o /dev/null \
                 -w "%{http_code}" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     [[ $RES == "304" ]] || fail "If-Modified-Since + If-None-Match did not result in 304, got $RES instead"
 
     testing "Trying If-Modified-Since + If-None-Match without token"
     RES=$($CURL -I "X-Instance: $INSTANCE" \
-                http://$WEB_HOST/index.html)
+                http://$PROXY_HOST/index.html)
 
     ETAG=$(echo "$RES" | tr -d '\r' | awk 'BEGIN {FS=": "}/^ETag/{print $2}')
     LASTMOD=$(echo "$RES" \
@@ -408,7 +408,7 @@ docker_test() {
                 -H "If-None-Match: $ETAG" \
                 -o /dev/null \
                 -w "%{http_code}" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     [[ $RES == "304" ]] || fail "If-Modified-Since + If-None-Match did not result in 304, got $RES instead"
 
@@ -416,7 +416,7 @@ docker_test() {
     RES=$($CURL --cookie "token=$TOKEN" \
                 -o /dev/null \
                 -w "%{http_code}" \
-                http://$WEB_HOST/index.html
+                http://$PROXY_HOST/index.html
        )
     [[ $RES == "200" ]] || fail "Could not get index.html without instance"
 
@@ -430,15 +430,15 @@ docker_test() {
     [[ $RES == "403" ]] || fail "Did not get 403, got $RES instead"
 
     testing "Trying / without token (should fail)"
-    RES=$($CURL http://$WEB_HOST/ )
+    RES=$($CURL http://$PROXY_HOST/ )
     [[ $RES == "Authenticate!" ]] || fail "Did not receive Authenticate!, got $RES instead"
 
     testing "Trying /index.html without token (should fail)"
-    RES=$($CURL http://$WEB_HOST/index.html )
+    RES=$($CURL http://$PROXY_HOST/index.html )
     [[ $RES == "Authenticate!" ]] || fail "Did not receive Authenticate!, got $RES instead"
 
     testing "Trying /foo.html without token"
-    RES=$($CURL http://$WEB_HOST/foo.html )
+    RES=$($CURL http://$PROXY_HOST/foo.html )
     [[ $RES == "foo!" ]] || fail "Did not receive foo!, got $RES instead"
 
     testing "Testing otp"

@@ -18,7 +18,7 @@ else
 fi
 
 
-m4 -DAUTH_SERVICE=auth-service:80 \
+m4 -DAUTH_SERVICE=auth-service-backend:80 \
    "$PARAM_SESSION_COOKIES" \
    "$PARAM_RATELIMIT" \
    /nginx.conf.m4 \

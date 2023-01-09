@@ -21,18 +21,18 @@ services:
         condition: service_healthy
     environment:
       - DB_HOST=auth-service-database
-    image: nejla/auth-service
+    image: nejla/auth-service-backend
     networks:
       - auth-service
       - proxy
     restart: unless-stopped
     volumes:
       - ./ed25519.priv.der:/run/secrets/header_signing_private_key:ro
-  auth-service-web:
+  auth-service-proxy:
     depends_on:
       auth-service-service:
         condition: service_healthy
-    image: nejla/auth-web
+    image: nejla/auth-service-proxy
     links:
       - auth-service-service:auth-service
       - backend:2451cfe5-e4db-46a9-800f-38eeec997105
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
   proxy:
     depends_on:
-      auth-service-web:
+      auth-service-proxy:
         condition: service_healthy
       backend:
         condition: service_healthy
