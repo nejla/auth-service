@@ -31,7 +31,7 @@ jobs:
         id: docker-meta
         uses: docker/metadata-action@v3
         with:
-          images: nejla/auth-service
+          images: nejla/auth-service-backend
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
           tags: |
@@ -51,7 +51,7 @@ jobs:
           labels: ${{ steps.docker-meta.outputs.labels }}
 
   build-auth-web-image:
-    name: "build auth-web image"
+    name: "build auth-service-proxy image"
     runs-on: ubuntu-latest
     steps:
       - name: Clone project
@@ -67,7 +67,7 @@ jobs:
         id: docker-meta
         uses: docker/metadata-action@v3
         with:
-          images: nejla/auth-web
+          images: nejla/auth-service-proxy
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
           tags: |
