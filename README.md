@@ -465,11 +465,27 @@ request has indeed passed through auth-service. This could be useful in a
 situation where the proxy server become compromised, or if some other container
 manages to reach the container running your application server.
 
-| Option                            | Required | Type   | Default                                   | Description                                                              |
-|-----------------------------------|----------|--------|-------------------------------------------|--------------------------------------------------------------------------|
-| `SIGNED_HEADERS_PRIVATE_KEY_PATH` | No       | String | `/run/secrets/header_signing_private_key` | Path to the Base64-DER-encoded Ed25519 private key to sign headers with. |
+| Option           | Required | Type                        | Default | Description                                                                                                                                     |
+|------------------|----------|-----------------------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `SIGNED_HEADERS` | No       | Boolean (`true` or `false`) | `true`  | Whether or not the signed header functionality is enabled. If the functionality is enabled, an Ed25519 private key can be provided (see below). |
 
-An Ed25519 key pair is used to sign and verify headers.
+A Ed25519 key pair has to be generated in order to sign and verify headers.
+
+auth-service-backend only needs a private key, since auth-service-backend only
+generates signed headers (not verifies them). The private key has to be in a
+Base64-DER-encoded format. The private key should be mounted to
+`/run/secrets/header_signing_private_key` in the auth-service-backend container.
+The key has to be passed as a file and not an environment variable to prevent it
+from leaking.
+
+When a private key has been generated and mounted, the application server can
+then verify the signatures using the public key. The application server should
+**not** have access to the private key. The public key does not have to be
+secured and can be passed to the application server as an environment variable.
+
+If a private key is not provided, auth-service-backend sets a random (and
+temporary) private key. In this scenario, the application server would just
+ignore the signed headers (since it doesn't have the public key to verify them).
 
 Instructions for generating the key pair follows.
 
@@ -494,13 +510,8 @@ $ base64 -d ed25519.priv.der \
     | base64 > ed25519.pub.der
 ```
 
-When starting the auth-service container, we need to mount the private key to
-`/run/secrets/header_signing_private_key` (or set
-`SIGNED_HEADERS_PRIVATE_KEY_PATH` to the path where we put it). The key has to
-be passed as a file and not an environment variable to prevent it from leaking.
-
-The public key does not have to be secured and can be passed to the backend as
-an environment variable.
+For more information about verifying headers, see [Haskell
+Library](#haskell-library).
 
 ## Configuring the auth-service-proxy container
 
@@ -634,7 +645,7 @@ API. For more information, see [the library documentation](Doc/Library.md).
 
 ## Legal
 
-Copyright © 2015-2022 Nejla AB. All rights reserved.
+Copyright © 2015-2023 Nejla AB. All rights reserved.
 
 Twilio and Twiml are registered trademarks of Twilio and/or its affiliates.
 Other names may be trademarks of their respective owners.

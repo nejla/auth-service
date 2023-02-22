@@ -37,7 +37,7 @@ services:
       - RESET_LINK_EXPIRATION_TIME=24 hours
       - ACCOUNT_CREATION=true
       - DEFAULT_INSTANCE=657b5108-7559-4b8e-a643-dd0cc29b9e34
-      - SIGNED_HEADERS_PRIVATE_KEY_PATH=/run/secrets/header_signing_private_key
+      - SIGNED_HEADERS=true # default
       - SERVICE_TOKEN=Ey3FGSjWe3KgjcNfo3sm
       - SAML_CONFIG_PATH=/run/saml
 

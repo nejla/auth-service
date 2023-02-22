@@ -33,10 +33,10 @@ build:
       - 'service/.stack-work'
     key: "auth-service"
 
-build-auth-web-image:
+build-auth-service-proxy-image:
   stage: build-images
   variables:
-    IMAGE_NAME: auth-web
+    IMAGE_NAME: auth-service-proxy
     DESTINATION: $REGISTRY/$IMAGE_NAME:$CI_COMMIT_SHA
     EXTRA_DESTINATION: $REGISTRY/$IMAGE_NAME:latest
   image:
@@ -51,8 +51,8 @@ build-auth-web-image:
   script:
     - if [ $CI_COMMIT_BRANCH = "master" ]; then EXTRA_ARGS="--destination $EXTRA_DESTINATION"; fi
     - 'echo "Building with --destination $DESTINATION $EXTRA_ARGS"'
-    - /kaniko/executor --context $CI_PROJECT_DIR/web
-                       --dockerfile $CI_PROJECT_DIR/web/Dockerfile
+    - /kaniko/executor --context $CI_PROJECT_DIR/proxy
+                       --dockerfile $CI_PROJECT_DIR/proxy/Dockerfile
                        --cache=true
                        --destination "$DESTINATION"
                        $EXTRA_ARGS
@@ -84,10 +84,10 @@ build-auth-service-baseimage:
     - build
 
 
-build-auth-service-image:
+build-auth-service-backend-image:
   stage: build-images
   variables:
-    IMAGE_NAME: auth-service
+    IMAGE_NAME: auth-service-backend
     DESTINATION: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$CI_COMMIT_SHA
     EXTRA_DESTINATION: $REGISTRY/$IMAGE_NAME:latest
   image:

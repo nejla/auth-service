@@ -112,16 +112,14 @@ readSignedHeaderKey path = liftIO $ do
       if
         | isDoesNotExistError e  ->
             hPutStrLn stderr
-            $ path ++ " does not exist. Please create it before starting or set\
-                      \ SIGNED_HEADERS_PRIVATE_KEY_PATH to the correct path"
+            $ path ++ " does not exist. Please create it before starting"
         | isPermissionError e ->
             hPutStrLn stderr
-            $ "Permission error reading " ++ path ++ ". Please check permissions\
-              \ or set SIGNED_HEADERS_PRIVATE_KEY_PATH to the correct path"
+            $ "Permission error reading " ++ path ++ ". Please check permissions"
         | otherwise ->
             hPutStrLn stderr
             $ path ++ " could not be read. Encountered error: " ++ show e
-            ++ ". Check if SIGNED_HEADERS_PRIVATE_KEY_PATH is set to the correct path"
+            ++ "."
       exitFailure)
   when (BS.null keyBS && isPipe) $ do
     hPutStrLn stderr $ path ++ " is a named pipe and is empty.\
@@ -182,17 +180,18 @@ getAuthServiceConfig conf = do
 
 getSecrets :: (MonadIO m, MonadLogger m) => Conf.Config -> m Secrets
 getSecrets conf = do
-  mbSignedHeaderKeyPath <-
-    getConfMaybe "SIGNED_HEADERS_PRIVATE_KEY_PATH" "signed-headers.private-key-path"
+  useSignedHeader <-
+    getConfBool "SIGNED_HEADERS" "signed-headers.enable" (Right True)
                  conf
   signedHeaderKey <-
-    case mbSignedHeaderKeyPath of
-      Nothing -> do
-        (privateKey, _publicKey) <- liftIO SignedAuth.mkKeys
-        $logInfo "SIGNED_HEADERS_PRIVATE_KEY_PATH not set, generating random key"
-        return privateKey
-      Just signedHeaderKeyPath ->
-        readSignedHeaderKey $ Text.unpack signedHeaderKeyPath
+    if useSignedHeader
+    then readSignedHeaderKey "/run/secrets/header_signing_private_key"
+    else do
+      (privateKey, _publicKey) <- liftIO SignedAuth.mkKeys
+      $logInfo "SIGNED_HEADERS is false, generating random key"
+      return privateKey
+
+
   serviceToken <- getConfMaybe "SERVICE_TOKEN" "service-token" conf
   return Secrets { secretsHeaderPrivateKey = signedHeaderKey
                  , secretsServiceToken = serviceToken
