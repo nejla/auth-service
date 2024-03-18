@@ -2,3 +2,5 @@ cradle:
   stack:
     - path: "./src"
       component: "auth-service-core:lib"
+    - path: "./openApi"
+      component: "api-definition"

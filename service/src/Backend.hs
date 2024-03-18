@@ -13,6 +13,7 @@ module Backend
 import           Control.Arrow                        ((***))
 import           Control.Lens                         hiding (from)
 import           Control.Monad
+import           Control.Monad.Trans                  (MonadIO, lift, liftIO)
 import qualified Control.Monad.Catch                  as Ex
 import           Control.Monad.Except
 import qualified Crypto.BCrypt                        as BCrypt
@@ -535,7 +536,7 @@ login timeframe remoteAddress maxAttempts
   where
     logFailed :: API (Either LoginError b)
               -> Log.AuthFailedReason
-              -> ExceptT LoginError (App ApiState 'Privileged 'ReadCommitted) b
+              -> ExceptT LoginError (App ApiState 'Privileged 'NC.ReadCommitted) b
     logFailed m reason = do
       lift m >>= \case
         Left e -> do
@@ -762,7 +763,7 @@ checkTokenInstance request tok inst
                                                 , Log.instanceId = inst
                                                 }
             return Nothing
-
+-- Not an SSO token
 checkTokenInstance request tok inst = do
     mbUsr <- getUserByToken tok
     case mbUsr of

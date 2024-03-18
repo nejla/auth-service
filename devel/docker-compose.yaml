@@ -68,7 +68,7 @@ services:
     links:
       - auth-service-backend
       # Link upstream containers to their instance IDs
-      - upstream:de305d54-75b4-431b-adb2-eb6b9e546014
+      - upstream:657b5108-7559-4b8e-a643-dd0cc29b9e34
     environment:
       # - SESSION_COOKIES=false
       - NORATELIMIT=true

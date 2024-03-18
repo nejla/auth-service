@@ -2,6 +2,11 @@
 
 set -e
 
-[[ -n $REGISTRY ]] || fail "REGISTRY is undefined"
-[[ -n $CI_BUILD_TOKEN ]] || fail "CI_BUILD_TOKE is undefined"
-docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY_IMAGE
+fail() {
+  echo "$*" >&2
+  exit 1
+}
+
+[[ -n $CI_REGISTRY ]] || fail "CI_REGISTRY is undefined"
+[[ -n $CI_JOB_TOKEN ]] || fail "CI_JOB_TOKEN is undefined"
+docker login -u gitlab-ci-token -p "$CI_JOB_TOKEN" "$CI_REGISTRY"

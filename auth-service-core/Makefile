@@ -8,32 +8,36 @@ build-env-file:=$(env-file)
 endif
 include $(build-env-file)
 
+.PHONY: all
+all: dist/openapi-gen dist/doc dist/openapi.json
 
 srcfiles:=$(shell find src -type f)
 test-srcfiles = $(shell find test-suite -type f)
 
-dist/lib: $(srcfiles) $(test-srcfiles) auth-service-core.cabal stack.yaml
+dist/openapi-gen: $(srcfiles) $(test-srcfiles) auth-service-core.cabal stack.yaml
 	rm -f stack.yaml.lock
 	mkdir -p ./dist
 	stack build --install-ghc --test --no-run-tests \
 	            ${stack_args} \
 	            ${stack_build_args} \
-	            --haddock --no-haddock-deps --haddock-hyperlink-source
-	git rev-parse HEAD > dist/lib
+	            --haddock --no-haddock-deps --haddock-hyperlink-source \
+	            --copy-bins --local-bin-path ./dist
 
 
-dist/doc: dist/lib
+dist/doc: dist/openapi-gen
 	rm -rf dist/doc
 	cp -fr $(shell stack path ${stack_args} --dist-dir)/doc/html/auth-service-core \
                dist/doc
 
+dist/openapi.json: dist/openapi-gen
+	dist/openapi-gen dist/openapi.json
 
 # Tests
 #######
 
 tests = dist/tests/tests
 
-$(tests): dist/tests/% : dist/lib $(srcfiles) $(test-srcfiles) auth-service-core.cabal stack.yaml
+$(tests): dist/tests/% : dist/openapi-gen $(srcfiles) $(test-srcfiles) auth-service-core.cabal stack.yaml
 	mkdir -p dist/tests
 	cp "$(shell stack ${stack_args} path --dist-dir)/build/$(notdir $@)/$(notdir $@)" dist/tests/
 

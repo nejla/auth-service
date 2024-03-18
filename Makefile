@@ -9,7 +9,7 @@ PROXY_IMAGE=$(REGISTRY)/$(PROXY_IMAGE_NAME)
 COMPOSE=docker-compose -f devel/docker-compose.yaml --project-directory=$(PWD)
 
 .PHONY: all
-all: auth-service-proxy.image dist/doc
+all: auth-service-proxy.image dist/doc dist/openapi.json
 	$(MAKE) -C service all
 
 .PHONY: dist/doc
@@ -22,6 +22,12 @@ dist/doc:
 	cp -rf service/dist/doc dist/doc/auth-service
 	# pandoc Doc/API.md -o dist/doc/index.html
 	cp -f Doc/API.html dist/doc/index.html
+
+.PHONY: dist/openapi.json
+dist/openapi.json:
+	$(MAKE) -C auth-service-core dist/openapi.json
+	mkdir -p dist
+	cp -f auth-service-core/dist/openapi.json dist/openapi.json
 
 .PHONY: service/image
 service/image:

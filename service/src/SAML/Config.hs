@@ -7,7 +7,8 @@
 
 module SAML.Config where
 
-import           Control.Monad.Logger             (logError, MonadLogger)
+import qualified Control.Monad.Catch              as Ex
+import           Control.Monad.Logger             (logError, logInfo, MonadLogger)
 import           Control.Monad.Trans
 import qualified Data.ByteString                  as BS
 import qualified Data.Configurator.Types          as Config
@@ -23,6 +24,7 @@ import qualified Data.UUID                        as UUID
 import qualified System.Directory                 as Dir
 import           System.Exit                      (exitFailure)
 import           System.FilePath                  ((</>))
+import           System.IO.Error                  (isDoesNotExistError)
 
 import           NejlaCommon.Config               hiding (Config)
 
@@ -90,6 +92,33 @@ getSamlConfig base inst = do
       $logError $ "Could not parse SAML certificate: " <> Text.pack e
       liftIO exitFailure
     Right r -> return r
+
+  let requestSigningKey = path </> "request-signing.key.pem"
+  mbRequestSigningKeyBS <- liftIO $ Ex.try (BS.readFile requestSigningKey)
+  samlInstanceConfigRequestSigningKey <- case mbRequestSigningKeyBS of
+    Right requestSigningKeyBS  ->
+      case parsePrivateKeyPem requestSigningKeyBS of
+        Left e -> do
+          $logError [i|Could not parse SAML request signing key from #{requestSigningKey}:  #{show e}|]
+          liftIO exitFailure
+        Right key -> return $ Just key
+    Left e | isDoesNotExistError e -> do
+               $logInfo [i|No request signing key found for #{inst}, disabling request signing|]
+               return Nothing
+    Left e -> do
+          $logError [i|Could not read SAML request signing key from #{requestSigningKey}:  #{show e}|]
+          liftIO exitFailure
+
+  $logInfo [i|Got SAML configuration for instance #{samlInstanceConfigInstance}|]
+
+  samlInstanceConfigRequestSigningDigest
+     <- case Map.lookup "request_signing_digest" conf of
+          Nothing -> return RequestSigningDigestSHA256
+          Just "sha1" -> return RequestSigningDigestSHA1
+          Just "sha256" -> return RequestSigningDigestSHA256
+          Just d -> do
+            $logError [i|Unknown request signing digest: #{d}|]
+            liftIO exitFailure
 
   return SamlInstanceConfig{..}
 

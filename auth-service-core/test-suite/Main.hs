@@ -8,6 +8,7 @@ import           Data.Set                   (Set)
 import qualified Data.Set                   as Set
 import           Data.Text                  (Text)
 import qualified Data.Text                  as Text
+import           Test.Hspec                 (Spec, describe, it, shouldBe)
 import qualified Test.Tasty
 import           Test.Tasty.Hspec
 
@@ -24,10 +25,10 @@ import           UnliftIO.Temporary
 import           System.Process.Typed       (runProcess_, proc)
 
 import qualified Data.Char                  as Char
-import qualified SignedAuth.Headers                    as Headers
-import qualified SignedAuth.JWS                        as JWS
-import qualified SignedAuth.Nonce                      as Nonce
-import qualified SignedAuth.Sign                       as Sign
+import qualified SignedAuth.Headers         as Headers
+import qualified SignedAuth.JWS             as JWS
+import qualified SignedAuth.Nonce           as Nonce
+import qualified SignedAuth.Sign            as Sign
 
 readKeys :: IO (Sign.PrivateKey, Sign.PublicKey)
 readKeys = withSystemTempDirectory "signed-auth-test." $ \path -> do

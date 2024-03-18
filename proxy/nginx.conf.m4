@@ -28,6 +28,7 @@ events {
 http {
     ifdef(`NORATELIMIT', `', `
     limit_req_zone $binary_remote_addr zone=login:10m rate=2r/m;
+    limit_req_zone $binary_remote_addr zone=sso:10m rate=1r/s;
     limit_req_zone $binary_remote_addr zone=service:10m rate=5r/s;
     limit_req zone=service burst=10;
     limit_req_status 429; # Too Many Requests
@@ -128,7 +129,7 @@ http {
                 }
 
                 ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=10 nodelay;')
+                limit_req zone=sso burst=10 nodelay;')
                 proxy_pass http://AUTH_SERVICE/sso/;
                 proxy_set_header X-Original-URI $request_uri;
                 proxy_set_header X-Instance $instance;

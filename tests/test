@@ -22,8 +22,8 @@ fi
 
 # You need to have jq in path
 
-AUTHSERVICE_CONTAINER=auth-service_auth-service_1
-DB_CONTAINER=auth-service_database_1
+AUTHSERVICE_CONTAINER=auth-service-auth-service-backend-1
+DB_CONTAINER=auth-service-database-1
 DB_HOST=database
 DB_USER=postgres
 DB_DATABASE=postgres
@@ -36,11 +36,22 @@ PASSWORD=pwd123
 USER2=user2@example.com
 PASSWORD2=pwd1234
 NAME="JohnDoe"
-INSTANCE="de305d54-75b4-431b-adb2-eb6b9e546014"
+INSTANCE="657b5108-7559-4b8e-a643-dd0cc29b9e34"
 INSTANCE2="$(uuidgen)"
 
 
 NOTINSTANCE="deadbeef-75b4-431b-adb2-eb6b9e546014"
+
+declare -a tmpfiles=()
+
+cleanup() {
+  for tmpfile in "${tmpfiles[@]}"; do
+    rm -f "$tmpfile"
+  done
+}
+
+trap "cleanup" EXIT
+
 
 testing () {
     echo -e "\e[32m$1 \e[39m"
@@ -168,7 +179,7 @@ login() {
 
 http() {
     tmpfile=$(mktemp --tmpdir auth-service.tmp.XXXXX) || fail "Could not make temporary file"
-    trap "rm -f $tmpfile" EXIT
+    tmpfiles+=("$tmpfile")
     res=$($CURL -o "$tmpfile" -w "%{http_code}" "$@")
     if [[ "$res" -lt 200 || "$res" -gt 300 ]]; then
       echo "http error (response code $res)"
@@ -180,7 +191,7 @@ http() {
 
 call() {
     tmpfile=$(mktemp --tmpdir auth-service.tmp.XXXXX) || fail "Could not make temporary file"
-    trap "rm -f $tmpfile" EXIT
+    tmpfiles+=("$tmpfile")
     ENDPOINT=$1
     shift
     RES=$($CURL -XPOST \
@@ -200,9 +211,10 @@ call() {
 }
 
 logout() {
-    $CURL -H "X-Instance: $INSTANCE" \
-          -H "X-Token: $TOKEN" \
-          http://$API/logout
+  http -XPOST \
+        -H "X-Instance: $INSTANCE" \
+        -H "X-Token: $TOKEN" \
+        "http://$API/logout"
 }
 
 check_upstream() {
@@ -226,7 +238,6 @@ clearEmail() {
 # Reads the latest email and tries to extract the token; stores it in $token
 emailGetToken() {
     tmpfile=$(mktemp --tmpdir auth-service.tmp.XXXXX) || fail "Could not make temporary file"
-    trap "rm -f $tmpfile" EXIT
     res=$($CURL --silent -w "%{http_code}" "http://$EMAIL_API/messages" -o "$tmpfile")
     if [[ $res -lt 200 || $res -gt 300 ]]; then
        fail "Failed with error code $res"
@@ -236,15 +247,16 @@ emailGetToken() {
 
     token=$(< "$tmpfile" \
       jq -r '.[0] | .MIME.Parts | .[1] | .Body' \
-              | perl -n -e '/\?token=3D([[:alnum:]]+)<\/a>/ && print $1')
-    [[ -n "$token" ]] || fail "could not get token"
-
+              | perl -MMIME::QuotedPrint -0777 -nle \
+                     'decode_qp($_) =~ /\?token=([[:alnum:]]+)/ && print $1' )
+    [[ -n "$token" ]] || { jq -r '.[0] | .MIME.Parts | .[1] | .Body' < "$tmpfile";  fail "could not get token"; }
+    tmpfiles+=("$tmpfile")
 }
 
 # run _local_ test
 runtest() {
     RES="$(login)"
-    echo $RES
+    echo "$RES"
     TOKEN=$(echo "$RES" | jq -r '.token.token')
     if [[ -z "$TOKEN" ]]; then
        echo "Could not login"
@@ -444,9 +456,9 @@ docker_test() {
     testing "Testing otp"
     create_otp $USER2 $PASSWORD2
     get_otp
-    [[ -n $OTP ]] || fail "Could not get OTP"
-    OTP=$(echo $OTP | tr '[:upper:]' '[:lower:]')
-    login $USER2 $PASSWORD2 $OTP || fail "could not log in"
+    [[ -n "$OTP" ]] || fail "Could not get OTP"
+    OTP=$(echo "$OTP" | tr '[:upper:]' '[:lower:]')
+    login $USER2 $PASSWORD2 "$OTP" || fail "could not log in"
 
     testing "Trying to login without otp"
     create_otp $USER2 $PASSWORD2
@@ -455,13 +467,14 @@ docker_test() {
     testing "Trying to double-use OTP"
     create_otp $USER2 $PASSWORD2
     get_otp
-    [[ -n $OTP ]] || fail "Could not get OTP"
-    OTP=$(echo $OTP | tr '[:upper:]' '[:lower:]')
-    login $USER2 $PASSWORD2 $OTP || fail "could not log in"
+    [[ -n "$OTP" ]] || fail "Could not get OTP"
+    OTP=$(echo "$OTP" | tr '[:upper:]' '[:lower:]')
+    login $USER2 $PASSWORD2 "$OTP" || fail "could not log in"
     logout
-    login $USER2 $PASSWORD2 $OTP && fail "Double-used OTP"
+    login $USER2 $PASSWORD2 "$OTP" && fail "Double-used OTP"
 
     testing "Testing logout"
+    login
     logout
     RES=$($CURL -H "X-Instance: $INSTANCE" \
                 -H "X-Token: $TOKEN" \
@@ -485,7 +498,7 @@ docker_test() {
     login || fail "could not log in"
     call "change-password" \
          -H "Content-Type: application/json" \
-         -d "{\"oldPassword\":\"$PASSWORD\",\"newPassword\":\"$PASSWORD2\"}"
+         -d "{\"old_password\":\"$PASSWORD\",\"new_password\":\"$PASSWORD2\"}"
     logout
     login $USER $PASSWORD2 || fail "Could not login with new password"
     login && fail "could still log on with old credentials"
@@ -498,7 +511,7 @@ docker_test() {
          -d "{\"email\": \"$USER\"}"
     emailGetToken
     call "reset-password" -H "Content-Type: application/json" \
-         -d "{\"token\":\"$token\", \"newPassword\":\"newpwd\"}"
+         -d "{\"token\":\"$token\", \"new_password\":\"newpwd\"}"
     login "$USER" "newpwd" || fail "Could not login"
     # Check that we can't login with the old credentials
     login && fail "password wasn't changed"
@@ -508,7 +521,7 @@ docker_test() {
          -H "Content-Type: application/json" \
          -d "{\"email\": \"$USER\"}"
     emailGetToken
-    $CURL "http://$API/reset-password-info/$token"
+    http "http://$API/reset-password-info/$token" >/dev/null
 
     testing "Password reset with unknown email"
     call "request-password-reset" \
@@ -518,7 +531,7 @@ docker_test() {
          -H "Content-Type: application/json" \
          -d "{\"email\": \"$USER\"}"
     emailGetToken
-    http "http://$API/reset-password-info?token=$token"
+    http "http://$API/reset-password-info?token=$token" >/dev/null
 
     testing "Checking Roles"
     docker_setup &> /dev/null

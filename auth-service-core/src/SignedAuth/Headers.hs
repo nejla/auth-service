@@ -5,14 +5,20 @@ import           Control.Lens
 import qualified Data.Aeson            as Aeson
 import           Data.ByteString       (ByteString)
 import qualified Data.ByteString.Lazy  as BSL
+import           Data.Data             (Proxy(..))
 import           Data.Time.Clock.POSIX (getPOSIXTime)
 
 import           SignedAuth.JWS
 import           SignedAuth.Nonce
 import           SignedAuth.Sign
 
+import qualified Data.OpenApi          as OpenApi
+
 -- JSON-encoded payload signed as JWS
 newtype JWS a = JWS ByteString
+
+instance OpenApi.ToParamSchema (JWS a) where
+  toParamSchema _ = OpenApi.toParamSchema (Proxy :: Proxy String)
 
 encodeHeaders ::
   Aeson.ToJSON payload => PrivateKey -> NoncePool -> payload -> IO (JWS payload)

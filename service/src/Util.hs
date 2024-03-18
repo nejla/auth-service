@@ -14,10 +14,6 @@ import qualified Language.Haskell.TH.Quote  as TH
 import qualified Language.Haskell.TH.Syntax as TH
 import qualified Text.Microstache           as Mustache
 
--- Orphan instances for Microstache Templates
-instance (TH.Lift a, TH.Lift b) => TH.Lift (Map a b) where
-  lift m = [|Map.fromAscList $(TH.lift $ Map.toAscList m)|]
-
 deriving instance TH.Lift Mustache.PName
 deriving instance TH.Lift Mustache.Key
 deriving instance TH.Lift Mustache.Node

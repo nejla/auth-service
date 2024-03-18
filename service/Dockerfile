@@ -1,7 +1,7 @@
 # @IMAGE auth-service-service
 # @VERSION 20200114-01
 
-FROM ubuntu:focal as baseimage
+FROM ubuntu:jammy as baseimage
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \

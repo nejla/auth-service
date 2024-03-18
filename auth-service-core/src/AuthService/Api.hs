@@ -23,7 +23,9 @@ type SSOLoginAPI = "sso" :> "login"
                            , Header "Cache-Control" Text
                            , Header "Pragma" Text
                            ]
-                   NoContent)
+                   SamlLoginRequest)
+
+type SSOEnabledAPI = "sso" :> "enabled" :> Get '[ JSON ] SsoEnabled
 
 type SSOAssertAPI = "sso" :> "assert"
             :> Header "X-Instance" InstanceID
@@ -140,7 +142,8 @@ type ServiceAPI = "service"
 -- Interface
 --------------------------------------------------------------------------------
 
-type Api = LoginAPI
+type Api = SSOEnabledAPI
+           :<|> LoginAPI
            :<|> SSOLoginAPI
            :<|> SSOAssertAPI
            :<|> CheckTokenAPI

@@ -12,6 +12,11 @@ module SAML
 where
 
 import           Control.Monad.Except
+import           Control.Monad                    (unless)
+import           Control.Monad.Trans              (MonadIO, lift, liftIO)
+import           Crypto.Hash.Algorithms           (SHA1(..), SHA256(..))
+import qualified Crypto.PubKey.RSA                as RSA (PrivateKey)
+import qualified Crypto.PubKey.RSA.PKCS15         as RSA
 import           Data.ByteString                  (ByteString)
 import qualified Data.ByteString.Base64           as B64
 import           Data.Functor
@@ -21,11 +26,15 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding               as Text
 import           Data.Time.Clock                  (getCurrentTime, addUTCTime)
+import           Data.Time.Clock                  (UTCTime)
 import qualified Data.UUID                        as UUID
 import qualified Database.Esqueleto               as E
 import qualified Database.Persist                 as P
 import           NejlaCommon                      (SV)
+import           Network.HTTP.Types               (urlEncode)
 import qualified Network.Wai.SAML2                as SAML
+import qualified Network.Wai.SAML2.Request        as SAML
+import qualified Network.Wai.SAML2.Response       as SAML
 import qualified Network.Wai.SAML2.Validation     as SAML
 
 import qualified Network.Wai.SAML2.Request        as AuthnRequest
@@ -70,11 +79,20 @@ config2SamlConf cfg =
 -- AuthnRequest ----------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-ssoLoginHandler :: Text -> API ByteString
-ssoLoginHandler issuer = do
-  request <- liftIO $ AuthnRequest.issueAuthnRequest issuer
+pruneSsoRequestTokens :: UTCTime -> API ()
+pruneSsoRequestTokens now = do
+    -- Delete IDs older than one hour
+  runDB . E.delete . E.from $ \(srid :: SV DB.SamlRequestId) ->
+     E.where_ (srid E.^. DB.SamlRequestIdCreated E.<. E.val (addUTCTime (-3600) now))
 
+
+ssoLoginHandler :: Text -> Maybe Text -> API ByteString
+ssoLoginHandler issuer destination = do
+  request' <- liftIO $ AuthnRequest.issueAuthnRequest issuer
+  let request = request' { SAML.authnRequestDestination = destination }
   now <- liftIO getCurrentTime
+  -- Don't let tokens accumulate in the absence of successful logins
+  pruneSsoRequestTokens now
   _ <- runDB $ P.insert DB.SamlRequestId
     { DB.samlRequestIdRequestId = AuthnRequest.authnRequestID request
     , DB.samlRequestIdCreated = now
@@ -82,7 +100,34 @@ ssoLoginHandler issuer = do
 
   return $ "SAMLRequest=" <> AuthnRequest.renderUrlEncodingDeflate request
 
-
+ssoLoginSignedHandler ::
+  Text
+  -> Maybe Text
+  -> RequestSigningDigest
+  -> RSA.PrivateKey
+  -> API ByteString
+ssoLoginSignedHandler issuer destination digest privateKey = do
+  query <- ssoLoginHandler issuer destination
+  let sigAlg = case digest of
+        RequestSigningDigestSHA1 -> "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
+        RequestSigningDigestSHA256 ->
+          "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+      sigAlgParam :: Text
+      sigAlgParam = [i|SigAlg=#{urlEncode True sigAlg}|]
+  let sigString :: ByteString
+      sigString = [i|#{query}&#{sigAlgParam}|]
+  mbSig <- liftIO $
+           case digest of
+             RequestSigningDigestSHA1 ->
+               RSA.signSafer (Just SHA1) privateKey sigString
+             RequestSigningDigestSHA256 ->
+               RSA.signSafer (Just SHA256) privateKey sigString
+  case mbSig of
+    Left err -> error (show err)
+    Right sigBs -> do
+      let sigB64 = B64.encode sigBs
+          sig = urlEncode True sigB64
+      return [i|#{sigString}&Signature=#{sig}|]
 
 data SSOResult =
   SSOInvalid
@@ -140,10 +185,7 @@ createSsoToken userId email' userName instId instName roles' = do
 checkAssertionInResponseTo :: Text -> ExceptT SSOResult API ()
 checkAssertionInResponseTo requestId = do
   now <- liftIO getCurrentTime
-  -- Delete IDs older than one hour
-  lift . runDB . E.delete . E.from $ \(srid :: SV DB.SamlRequestId) ->
-     E.where_ (srid E.^. DB.SamlRequestIdCreated E.<. E.val (addUTCTime (-3600) now))
-
+  lift $ pruneSsoRequestTokens now
   -- Find and delete request ID
   deleted <- lift . runDB $ E.deleteCount . E.from $ \(srid :: SV DB.SamlRequestId) ->
      E.where_ (srid E.^. DB.SamlRequestIdRequestId E.==. E.val requestId)
@@ -166,8 +208,8 @@ ssoAssertHandler cfg response = runExceptT $ do
              lift . Log.logDebug $
                (either (const "could not decode Base64") Text.decodeUtf8 . B64.decode . Text.encodeUtf8 $ samlResponseBody response)
              throwError SSOInvalid
-           Right r -> do
-             return r
+           Right (assertion, r) ->
+             return (assertion, SAML.responseInResponseTo r)
 
   -- Reference [InResponseTo]
   --

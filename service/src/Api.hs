@@ -16,6 +16,7 @@ import           Backend
 import           Control.Lens                     hiding (Context)
 import qualified Control.Monad.Catch              as Ex
 import           Control.Monad.Except
+import           Control.Monad.Trans              (lift, liftIO)
 import           Data.Aeson                       (encode)
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
@@ -100,6 +101,13 @@ serveLogin pool st loginReq = loginHandler
                          , errHeaders      = []
                          }
 
+serveSSOEnabledAPI :: ConnectionPool -> ApiState -> Server SSOEnabledAPI
+serveSSOEnabledAPI _pool st =
+  case configSamlConfig (apiStateConfig st) of
+    Nothing -> return $ SsoEnabled False
+    Just{} -> return $ SsoEnabled True
+
+
 serveSSOAssertAPI :: ConnectionPool -> ApiState -> Server SSOAssertAPI
 serveSSOAssertAPI pool st Nothing _ = do
   liftHandler $ runAPI pool st $
@@ -139,12 +147,24 @@ serveSSOLoginAPI pool st (Just inst) = do
     Just samlConf -> do
       let audience = samlInstanceConfigAudience samlConf
           baseUrl = samlInstanceConfigIdPBaseUrl samlConf
-      param <- liftHandler . runAPI pool st $ SAML.ssoLoginHandler audience
+          -- SAML request "destination" is required when the request is signed
+          destination = Just baseUrl
+          digest = samlInstanceConfigRequestSigningDigest samlConf
+      param <- case samlInstanceConfigRequestSigningKey samlConf of
+        -- Request signing disabled
+        Nothing ->
+          liftHandler . runAPI pool st $ SAML.ssoLoginHandler
+                                                     audience destination
+        Just key ->
+          liftHandler . runAPI pool st
+                     $ SAML.ssoLoginSignedHandler audience destination digest
+                     key
+      let location = [i|#{baseUrl}?#{param}|] :: Text
       return $
-        addHeader @"Location" ([i|#{baseUrl}?#{param}|] :: Text)
+        addHeader @"Location" location
         $ addHeader @"Cache-Control" ("no-cache, no-store" :: Text)
         $ addHeader @"Pragma" ("no-cache" :: Text)
-          NoContent
+          SamlLoginRequest {samlLoginRequestLocation = location}
 
 
 serveLogout :: ConnectionPool -> ApiState -> Server LogoutAPI
@@ -445,6 +465,7 @@ serveAPI pool noncePool conf secrets =
                        , apiStateNoncePool = noncePool
                        }
     in serve apiPrx $ serveStatus
+                               :<|> serveSSOEnabledAPI pool ctx
                                :<|> serveLogin pool ctx
                                :<|> serveSSOLoginAPI pool ctx
                                :<|> serveSSOAssertAPI pool ctx

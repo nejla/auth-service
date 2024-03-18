@@ -21,15 +21,11 @@ import qualified Control.Monad.Catch     as Ex
 import qualified Crypto.PubKey.RSA.Types as RSA
 import           Data.Default
 import           Data.Map.Strict         (Map)
-import qualified Data.Map.Strict         as Map
 import           Data.Text               (Text)
 import           Data.Time               (NominalDiffTime)
 import           Data.Typeable
-import           Data.UUID               (UUID)
-import qualified Data.UUID               as UUID
 import           Network.Mail.Mime       (Address)
 import qualified Text.Microstache        as Mustache
-import           Web.FormUrlEncoded
 
 import qualified SignedAuth
 import           AuthService.Types
@@ -110,6 +106,11 @@ data AccountCreationConfig =
   , accountCreationConfigDefaultInstances :: [InstanceID]
   }
 
+data RequestSigningDigest =
+  RequestSigningDigestSHA1
+  | RequestSigningDigestSHA256
+    deriving (Eq, Ord, Show)
+
 data SamlInstanceConfig =
   SamlInstanceConfig
   { samlInstanceConfigEncryptionKey :: RSA.PrivateKey
@@ -120,6 +121,8 @@ data SamlInstanceConfig =
   , samlInstanceConfigIdPBaseUrl :: Text
   , samlInstanceConfigRedirectAfterLogin :: Text
   , samlInstanceConfigAllowUnsolicited :: Bool
+  , samlInstanceConfigRequestSigningKey :: Maybe RSA.PrivateKey
+  , samlInstanceConfigRequestSigningDigest :: RequestSigningDigest
   } deriving Show
 
 data SamlConfig =

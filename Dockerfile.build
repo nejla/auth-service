@@ -1,7 +1,7 @@
 # Dockerfile that builds the service from source
 # E.g. for publication on Dockerhub
 
-FROM haskell:8.10.7 as build
+FROM haskell:9.6.4 as build
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
@@ -16,7 +16,7 @@ WORKDIR /service
 RUN mkdir /dist && \
     stack --stack-yaml stack.dockerhub.yaml build --install-ghc --copy-bins --local-bin-path /dist -j2
 
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \

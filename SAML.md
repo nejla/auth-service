@@ -67,6 +67,8 @@ that should have SAML enabled.
     signed assertions. (the "realm certificate")
   * `config`: a simple "key=value" encoded configuration for the instance, with
     the following fields:
+  * `request-signing.key.pem` (optional): RSA private key file for signing authn
+    requests. If this file is missing, requests signing is disabled.
 
 |Option|Required|Type|Default|Description|
 |------|--------|----|-------|-----------|
@@ -76,6 +78,7 @@ that should have SAML enabled.
 |`redirect_after_login`| No| String| `/`| URL to redirect after SAML login succeeds|
 |`allow_unencrypted_assertions`| No| Boolean| false| Accept unencrypted assertions from the IdP (encrypted assertions are always accepted). Note that the encryption key still needs to be set.|
 |`allow_unsolicited_responses`| No| Boolean| false| Accept unsolicited auth responses,e.g. IdP-initiated SSO.|
+|`request_signing_digest`| No| String | sha256 | Digest to use when signing authentication requests. Has to be one of `sha1` or `sha256` but the use of `sha1` is discouraged.
 
 Example for the `config` file:
 ```
@@ -91,4 +94,4 @@ redirect_after_login=/index.html
 ## Testing SAML SSO:
 
 If the example server is running, you can navigate your browser to
-`http://localhost:8000/api/sso/login` to test the SSO login
+`http://localhost:8000/api/sso/login` to test the SSO login.

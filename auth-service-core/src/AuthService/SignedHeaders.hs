@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -48,7 +49,6 @@ module AuthService.SignedHeaders
 
 
 import           Control.Lens
-import           Control.Monad
 import qualified Control.Monad.Catch             as Ex
 import           Control.Monad.Logger
 import           Control.Monad.Trans
@@ -61,7 +61,6 @@ import qualified Data.Text                       as Text
 import qualified Data.Text.Encoding              as Text
 import qualified Data.Text.Encoding.Error        as Text
 import           Data.Time.Clock
-import qualified Data.UUID                       as UUID
 import           GHC.TypeLits                    (symbolVal, Symbol, KnownSymbol)
 import qualified Network.HTTP.Types              as HTTP
 import           Network.Wai                     (requestHeaders, Request)
@@ -74,8 +73,8 @@ import qualified SignedAuth.Nonce                as Nonce
 import qualified SignedAuth.Sign                 as Sign
 
 import           AuthService.Types
-import qualified Data.Swagger.ParamSchema        as Swagger
-import qualified Servant.Swagger                 as Swagger
+import qualified Data.OpenApi.ParamSchema        as OpenApi
+import qualified Servant.OpenApi                 as OpenApi
 
 import           Helpers
 import           Servant.Server.Internal.Delayed (Delayed(..))
@@ -263,11 +262,11 @@ newtype AuthCredentials (required :: Requiredness) a = AuthCredentials a
 
 makePrisms ''AuthCredentials
 
-instance Swagger.ToParamSchema (AuthCredentials required a) where
-  toParamSchema _ = Swagger.toParamSchema (Proxy :: Proxy String)
+instance OpenApi.ToParamSchema (AuthCredentials required a) where
+  toParamSchema _ = OpenApi.toParamSchema (Proxy :: Proxy String)
 
-instance Swagger.HasSwagger rest => Swagger.HasSwagger (AuthCredentials required a :> rest) where
-  toSwagger _ = Swagger.toSwagger (Proxy :: Proxy (Header "X-Auth" String :> rest))
+instance OpenApi.HasOpenApi rest => OpenApi.HasOpenApi (AuthCredentials required a :> rest) where
+  toOpenApi _ = OpenApi.toOpenApi (Proxy :: Proxy (Header "X-Auth" String :> rest))
 
 type instance IsElem' e (AuthCredentials required a :> s) = IsElem e s
 
@@ -409,7 +408,7 @@ instance ( HasServer api context
            Just authHeader ->
              case checkRole (Proxy :: Proxy r) (authHeader ^. roles) of
                Nothing -> delayedFailFatal err403
-               Just role -> return ()
+               Just _role -> return ()
 
        -- Adds auth check that doesn't return anything
        addAuthCheck_ Delayed{..} new =
@@ -421,10 +420,10 @@ instance ( HasServer api context
   hoistServerWithContext _ pc nt s =
     hoistServerWithContext (Proxy :: Proxy api) pc nt s
 
-instance Swagger.ToParamSchema (HasRole r required) where
-  toParamSchema _ = Swagger.toParamSchema (Proxy :: Proxy String)
+instance OpenApi.ToParamSchema (HasRole r required) where
+  toParamSchema _ = OpenApi.toParamSchema (Proxy :: Proxy String)
 
-instance Swagger.HasSwagger rest => Swagger.HasSwagger (HasRole r required :> rest) where
-  toSwagger _ = Swagger.toSwagger (Proxy :: Proxy (Header "X-Auth" String :> rest))
+instance OpenApi.HasOpenApi rest => OpenApi.HasOpenApi (HasRole r required :> rest) where
+  toOpenApi _ = OpenApi.toOpenApi (Proxy :: Proxy (Header "X-Auth" String :> rest))
 
 type instance IsElem' e (HasRole r required :> s) = IsElem e s

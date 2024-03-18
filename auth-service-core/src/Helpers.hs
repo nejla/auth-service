@@ -13,7 +13,7 @@ dropPrefix :: [Char] -> [Char] -> [Char]
 dropPrefix pre str=
     case pre `List.stripPrefix` str of
      Just (n:ns) -> toLower n : ns
-     _ -> error "prefix now found"
+     _ -> error "prefix not found"
 
 debug :: MonadIO m => Text -> m ()
 debug = liftIO  . Text.hPutStrLn stderr

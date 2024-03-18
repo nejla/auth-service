@@ -3,16 +3,12 @@
 # in stack.dockerhub.yaml !
 ##############################################
 
-resolver: lts-18.12
+resolver: lts-22.12
 
 extra-deps:
   - git: git@git.nejla.com:nejla-ab/common.git
-    commit: 3cbc5d0db2e8c18838159b92d7bb9b39f551e226
+    commit: f83bc8cdfb2cd067c3713a254f57ce7435fed2c7
   - '../auth-service-core'
-  - base64-bytestring-1.2.0.1
-  - git: https://github.com/Philonous/wai-saml2.git
-    commit: b97c4aa979b53ed59257ae852942cd38bda46d9c
-  - hspec-wai-json-0.11.0
 
 docker:
   enable: false
@@ -20,16 +16,5 @@ docker:
 
 allow-newer: true
 
-flags:
-  nejla-common:
-    # Required for lts < 19
-    new-singletons: false
-
 nix:
-  # shell-file: stack.nix
-  packages:
-    - zlib
-    - postgresql
-    - pkg-config
-    - libxml2
-    - openssl
+  shell-file: ../shell.nix
