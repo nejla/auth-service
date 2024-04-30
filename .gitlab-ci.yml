@@ -12,7 +12,7 @@ variables:
 
 build:
   stage: build
-  image: registry.nejla.com/nejla-ab/docker-images/nejla-build:f9e4283c2ac701a26cc8a21a0782f5dbd51c446e
+  image: registry.nejla.com/nejla-ab/docker-images/nejla-build:84b46d4776ddc919cb4313f80fc1b8ded2a67622
   before_script:
     - eval $(ssh-agent -s)
     - ssh-add <(echo "$AUTHSERVICE_SSH_PRIVKEY")

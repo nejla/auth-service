@@ -1,20 +1,11 @@
 # stack.yaml for use by dockerhub
+# This file should correspond to stack.yaml
 
 resolver: lts-22.12
 
 extra-deps:
   - git: https://github.com/nejla/nejla-common.git
-    commit: dc73eab0fffd07b7aac77570c386dbe21ee2bb63
+    commit: f3a1d5bdd81ac56132d117f12aadcf50dbf7b2a6
   - '../auth-service-core'
-  - base64-bytestring-1.2.0.1
-  - git: https://github.com/Philonous/wai-saml2.git
-    commit: b97c4aa979b53ed59257ae852942cd38bda46d9c
-  - hspec-wai-json-0.11.0
-
-flags:
-  nejla-common:
-    # Required for lts < 19
-    new-singletons: false
-
 
 allow-newer: true
