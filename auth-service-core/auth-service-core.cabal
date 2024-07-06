@@ -90,6 +90,7 @@ test-suite tests
   ghc-options: -Wall -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=incomplete-record-updates -rtsopts -threaded -with-rtsopts=-N
   build-depends:
       base
+    , aeson
     , auth-service-core
     , base64-bytestring >=1.1
     , bytestring

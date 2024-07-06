@@ -520,9 +520,15 @@ auth-service-backend service can, that is with environment variables.
 
 Only one option is supported.
 
-| Option            | Required | Type                        | Default | Description                                                                           |
-|-------------------|----------|-----------------------------|---------|---------------------------------------------------------------------------------------|
-| `SESSION_COOKIES` | No       | Boolean (`true` or `false`) | `false` | Whether or not cookies should be session cookies (as opposed to “permanent” cookies). |
+| Option            | Required | Type                         | Default                 | Description                                                                           | Example                                  |
+|-------------------|----------|------------------------------|-------------------------|---------------------------------------------------------------------------------------|------------------------------------------|
+| `SESSION_COOKIES` | No       | Boolean (`true` or `false`)  | `false`                 | Whether or not cookies should be session cookies (as opposed to “permanent” cookies). | `SESSION_COOKIES=false`                  |
+| `AUTH_SERVICE`    | No       | Text                         | auth-service-backend:80 | Host and port of the auth service backend                                             | `AUTH_SERVICE=auth-service-backend:8080` |
+| `NORATELIMIT`     | No       | Boolean (`true` or `false`)  | false                   | Disable rate limiting                                                                 | `NORATELIMIT=true`                       |
+| `INSTANCE_PORTS`  | No       | List of string=integer pairs | `80` for instances that aren't mentioned | Port of upstream web services as a semicolon-separated list of instance=port pairs | `INSTANCE_PORTS=e01e95a7-c2b9-40ca-bd31-cd602f62ad84=8000;676be2b5-380b-4cc2-93fb-d3fa70aa7e51=8081` |
+| `DEBUG`           | No       | Boolean (`true` or `false`)  | false                   | Use nginx-debug and enable debug output                                               | `DEBUG=true`                             |
+| `ACCESS_LOG`      | No       | path or `false`              | false                   | Path to write access log                                                              | `ACCESS_LOG=/var/log/nginx.access.log`   |
+| `ERROR_LOG`       | No       | path or `false`              | false                   | Path to write error log                                                               | `ERROR_LOG=/var/log/nginx.error.log`     |
 
 Cookies set when calls to `/api/login` are made are “permanent” by default. “Permanent” cookies expires `Fri, 01-Jan-2038 00:00:01 GMT`.
 

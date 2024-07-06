@@ -4,6 +4,7 @@ module Main where
 
 import           Control.Lens
 import           Control.Monad.Trans
+import qualified Data.Aeson                 as Aeson
 import           Data.Set                   (Set)
 import qualified Data.Set                   as Set
 import           Data.Text                  (Text)
@@ -24,6 +25,7 @@ import           UnliftIO.Temporary
 
 import           System.Process.Typed       (runProcess_, proc)
 
+import qualified AuthService.Types as Types
 import qualified Data.Char                  as Char
 import qualified SignedAuth.Headers         as Headers
 import qualified SignedAuth.JWS             as JWS
@@ -64,6 +66,7 @@ spec keys = do
   describe "JWS"     $ jwsSpec keys
   describe "nonces"    nonceSpec
   describe "headers" $ headersSpec keys
+  describe "aeson"   $ aesonSpec
 
 --------------------------------------------------------------------------------
 -- Signing and verifying -------------------------------------------------------
@@ -225,3 +228,22 @@ headersSpec (privKey, pubKey) =
       encoded <- liftIO $ Headers.encodeHeaders privKey pool ("Hello" :: Text)
       decoded <- liftIO $ Headers.decodeHeaders pubKey frame encoded
       decoded `shouldBe` Right ("Hello" :: Text)
+
+--------------------------------------------------------------------------------
+-- Aeson -----------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+aesonSpec :: Spec
+aesonSpec = do
+  passwordResetAesonSpec
+
+passwordResetAesonSpec :: Spec
+passwordResetAesonSpec =
+  describe "password reset" $ do
+    it "parses" $
+      Aeson.decode "{\"token\": \"12345\", \"newPassword\": \"pwd\"}"
+      `shouldBe` Just (Types.PasswordReset
+                       { Types.passwordResetToken = "12345"
+                       , Types.passwordResetOtp   = Nothing
+                       , Types.passwordResetNewPassword = "pwd"
+                       })

@@ -11,6 +11,8 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
 
 module AuthService.Types where
 
@@ -313,7 +315,7 @@ data PasswordReset =
   , passwordResetOtp         :: Maybe Password
   , passwordResetNewPassword :: Password
   }
-    deriving (Generic,  Show )
+    deriving (Generic,  Show, Eq)
     deriving (ToJSON, FromJSON, OpenApi.ToSchema)
       via (JSONStruct PasswordReset)
 
@@ -331,7 +333,7 @@ data CreateAccount =
   , createAccountName     :: Name
   , createAccountPhone    :: Maybe Phone
   }
-    deriving (Generic,  Show )
+    deriving (Generic,  Show)
     deriving (ToJSON, FromJSON, OpenApi.ToSchema)
       via (JSONStruct CreateAccount)
 
@@ -366,7 +368,9 @@ newtype DeactivateUser =
   }
     deriving (Generic,  Show )
     deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct DeactivateUser)
+-- Intentionally inconsistent with the rest of the API for compatibility with
+-- previos version
+      via (JSONStructWith 'Underscore DeactivateUser)
 
 
 makeLensesWith camelCaseFields ''DeactivateUser

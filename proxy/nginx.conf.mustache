@@ -1,24 +1,17 @@
-# use m4 to configure
-#
-# Example:
-# m4 -DAUTH_SERVICE=localhost:3000 \
-#    -DUPSTREAM_PORT=4000 \
-#    -DACCESS_LOG=/var/log/nginx/access.log
-#    -DERROR_LOG=/var/log/nginx/error.log
-#    -DPORT=80 \
-#    nginx.conf.m4 \
-#    > nginx.conf
+# use mustache to configure
 #
 # As part of the auth-service-proxy container, parameters are set in the run.sh
-# script. That is, variables like NORATELIMIT you see in here are NOT
-# environment variables but are instead explicitly set in run.sh. See run.sh for
-# more details.
+# script. Interpolations like \{\{#ratelimit\}\} are explicitly set in run.sh.
+# See run.sh for more details.
 
 worker_processes 1;
+{{#error_log}}
+error_log {{.}} warn;
+{{/error_log}}
 
-ifdef(`ERROR_LOG', `error_log ERROR_LOG warn;')
-
+{{#debug}}
 error_log /dev/stderr debug;
+{{/debug}}
 
 events {
     worker_connections 1024;
@@ -26,13 +19,18 @@ events {
 
 
 http {
-    ifdef(`NORATELIMIT', `', `
+    {{#ratelimit}}
+    # Rate limitting
     limit_req_zone $binary_remote_addr zone=login:10m rate=2r/m;
     limit_req_zone $binary_remote_addr zone=sso:10m rate=1r/s;
     limit_req_zone $binary_remote_addr zone=service:10m rate=5r/s;
     limit_req zone=service burst=10;
     limit_req_status 429; # Too Many Requests
-    ')
+    {{/ratelimit}}
+    {{^ratelimit}}
+    # Rate limiting disabled
+    {{/ratelimit}}
+
     # Make sure we see the real address so we can rate limit according to it
     set_real_ip_from 0.0.0.0/0;
     real_ip_header  X-Forwarded-For;
@@ -43,6 +41,12 @@ http {
         ''      close;
     }
 
+    map $http_x_instance $instance_port {
+        default "80";
+        {{#instance_ports}}
+        "{{instance}}" "{{port}}";
+        {{/instance_ports}}
+    }
 
     client_max_body_size 0;
 
@@ -50,10 +54,12 @@ http {
     default_type application/octet-stream;
     sendfile on;
     keepalive_timeout 65;
-    ifdef(`ACCESS_LOG', `access_log ACCESS_LOG;')
+    {{#access_log}}
+    access_log {{.}};
+    {{/access_log}}
 
     server {
-        ifdef(`PORT',`listen PORT;',`listen 80;')
+        listen 80;
         server_name auth-service;
         rewrite_log on;
         resolver 127.0.0.11;
@@ -64,7 +70,7 @@ http {
             proxy_set_header X-AUTH $auth;
             proxy_set_header X-Original-URI $request_uri;
 
-            proxy_pass http://$http_x_instance;
+            proxy_pass http://$http_x_instance:$instance_port;
 
             # [1] Set the "Upgrade" and "Connection" headers when we receive
             # them We have to manually pass them through because those headers
@@ -92,20 +98,20 @@ http {
                 if ($instance = '') {
                   return 403;
                 }
-                proxy_pass http://AUTH_SERVICE/check-token;
+                proxy_pass http://{{auth_service_host}}/check-token;
                 proxy_set_header X-Token $token;
                 proxy_set_header X-Instance $instance;
                 proxy_set_header X-Original-URI $request_uri;
                 proxy_set_header Accept application/json;
         }
 
-        define(`expire', `ifelse(SESSION_COOKIES, `false', `; Expires=Fri, 01-Jan-2038 00:00:01 GMT;')')
         location = /login {
-                ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=10 nodelay;')
-                proxy_pass http://AUTH_SERVICE/login/;
+                {{#ratelimit}}
+                limit_req zone=login burst=10 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/login/;
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; SameSite=Lax; Secure; Path=/expire";
+                add_header Set-Cookie "token=$upstream_http_x_token; SameSite=Lax; Secure; Path=/;{{expire}}";
         }
 
         location /sso/assert {
@@ -114,12 +120,13 @@ http {
                   return 403;
                 }
 
-                ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=10 nodelay;')
-                proxy_pass http://AUTH_SERVICE/sso/assert;
+                {{#ratelimit}}
+                limit_req zone=login burst=10 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/sso/assert;
                 proxy_set_header X-Original-URI $request_uri;
                 proxy_set_header X-Instance $instance;
-                add_header Set-Cookie "token=$upstream_http_x_token; SameSite=Lax; Secure; Path=/expire";
+                add_header Set-Cookie "token=$upstream_http_x_token; SameSite=Lax; Secure; Path=/;{{expire}}";
         }
 
         location /sso/ {
@@ -128,9 +135,10 @@ http {
                   return 403;
                 }
 
-                ifdef(`NORATELIMIT', `', `
-                limit_req zone=sso burst=10 nodelay;')
-                proxy_pass http://AUTH_SERVICE/sso/;
+                {{#ratelimit}}
+                limit_req zone=sso burst=10 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/sso/;
                 proxy_set_header X-Original-URI $request_uri;
                 proxy_set_header X-Instance $instance;
         }
@@ -144,7 +152,7 @@ http {
                   return 403;
                 }
 
-                proxy_pass http://AUTH_SERVICE/logout/$token;
+                proxy_pass http://{{auth_service_host}}/logout/$token;
                 proxy_set_header X-Original-URI $request_uri;
                 add_header Set-Cookie "token=deleted; Path=/; Expires=Thu, 01-Jan-1970 00:00:01 GMT";
 
@@ -157,13 +165,14 @@ http {
                 if ($token = '') {
                   return 403;
                 }
-                proxy_pass http://AUTH_SERVICE/disable-sessions/$token/;
+                proxy_pass http://{{auth_service_host}}/disable-sessions/$token/;
                 proxy_set_header X-Original-URI $request_uri;
 
         }
         location = /change-password {
-                ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=10 nodelay;')
+                {{#ratelimit}}
+                limit_req zone=login burst=10 nodelay;
+                {{/ratelimit}}
                 set $token $cookie_token;
                 if ($token = '') {
                   set $token $http_x_token;
@@ -171,7 +180,7 @@ http {
                 if ($token = '') {
                   return 403;
                 }
-                proxy_pass http://AUTH_SERVICE/change-password/$token/;
+                proxy_pass http://{{auth_service_host}}/change-password/$token/;
                 proxy_set_header X-Original-URI $request_uri;
 
         }
@@ -183,7 +192,7 @@ http {
                 if ($token = '') {
                   return 403;
                 }
-                proxy_pass http://AUTH_SERVICE/check-token/$token/;
+                proxy_pass http://{{auth_service_host}}/check-token/$token/;
                 proxy_pass_request_body off;
                 proxy_set_header Content-Length "";
                 proxy_set_header X-Original-URI $request_uri;
@@ -202,46 +211,50 @@ http {
                 if ($token = '') {
                   return 403;
                 }
-                proxy_pass http://AUTH_SERVICE/user-info-by-token/$token/;
+                proxy_pass http://{{auth_service_host}}/user-info-by-token/$token/;
                 proxy_pass_request_body off;
                 proxy_set_header Content-Length "";
                 proxy_set_header X-Original-URI $request_uri;
         }
 
         location = /request-password-reset {
-                proxy_pass http://AUTH_SERVICE/request-password-reset/;
+                proxy_pass http://{{auth_service_host}}/request-password-reset/;
                 proxy_set_header X-Original-URI $request_uri;
         }
 
         location = /reset-password {
-                ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=3 nodelay;')
-                proxy_pass http://AUTH_SERVICE/reset-password/;
+                {{#ratelimit}}
+                limit_req zone=login burst=3 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/reset-password/;
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/expire";
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/;{{expire}}";
         }
 
         location = /reset-password-info {
-                ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=3 nodelay;')
-                proxy_pass http://AUTH_SERVICE/reset-password-info/;
+                {{#ratelimit}}
+                limit_req zone=login burst=3 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/reset-password-info/;
                 proxy_pass_request_body off;
                 proxy_set_header Content-Length "";
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/expire";
+                add_header Set-Cookie "token=$upstream_http_x_token; Path=/;{{expire}}";
         }
 
         location = /create-account {
-               ifdef(`NORATELIMIT', `', `
-                limit_req zone=login burst=3 nodelay;')
-                proxy_pass http://AUTH_SERVICE/create-account/;
+                {{#ratelimit}}
+                limit_req zone=login burst=3 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/create-account/;
                 proxy_set_header X-Original-URI $request_uri;
         }
 
         location = /auth-service-status {
-               ifdef(`NORATELIMIT', `', `
-                limit_req zone=service burst=1 nodelay;')
-                proxy_pass http://AUTH_SERVICE/status/;
+                {{#ratelimit}}
+                limit_req zone=service burst=1 nodelay;
+                {{/ratelimit}}
+                proxy_pass http://{{auth_service_host}}/status/;
                 proxy_set_header X-Original-URI $request_uri;
         }
 
@@ -257,7 +270,7 @@ http {
               proxy_set_header X-Original-URI $request_uri;
               proxy_set_header X-Token $token;
 
-              proxy_pass http://AUTH_SERVICE/admin/;
+              proxy_pass http://{{auth_service_host}}/admin/;
 
         }
 
