@@ -228,7 +228,6 @@ http {
                 {{/ratelimit}}
                 proxy_pass http://{{auth_service_host}}/reset-password/;
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/;{{expire}}";
         }
 
         location = /reset-password-info {
@@ -239,7 +238,6 @@ http {
                 proxy_pass_request_body off;
                 proxy_set_header Content-Length "";
                 proxy_set_header X-Original-URI $request_uri;
-                add_header Set-Cookie "token=$upstream_http_x_token; Path=/;{{expire}}";
         }
 
         location = /create-account {
