@@ -65,6 +65,9 @@ data AuditEvent
     , auditUserInstances :: [InstanceID]
     , auditUserRoles :: [Text]
     }
+  | AuditUserRemoved
+    { auditUserID :: UserID
+    }
   | AuditUserRoleAdded
     { auditUserID :: UserID
     , auditUserRole :: Text
@@ -133,6 +136,7 @@ Aeson.deriveJSON ((aesonTHOptions "audit")
 
 auditLogType :: AuditEvent -> Text
 auditLogType AuditUserCreated{} = "user created"
+auditLogType AuditUserRemoved{} = "user removed"
 auditLogType AuditUserRoleAdded{} = "role added"
 auditLogType AuditUserRoleRemoved{} = "role removed"
 auditLogType AuditResetTokenCreated{} = "password reset token created"
@@ -153,6 +157,7 @@ auditLogType AuditUserDeleted{} = "user information redacted"
 -- | Retrieve the user ID from the event
 auditLogUser :: AuditEvent -> Maybe UserID
 auditLogUser AuditUserCreated            {auditUserID = uid} = Just uid
+auditLogUser AuditUserRemoved            {auditUserID = uid} = Just uid
 auditLogUser AuditUserRoleAdded          {auditUserID = uid} = Just uid
 auditLogUser AuditUserRoleRemoved        {auditUserID = uid} = Just uid
 auditLogUser AuditResetTokenCreated      {auditUserID = uid} = Just uid

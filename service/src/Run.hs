@@ -103,6 +103,7 @@ runMain = do
                   hPutStrLn stderr "Could not add user"
                   exitFailure
               Just (UserID uid) -> liftIO $ print uid
+         ("rmuser": args') -> run $ removeUser (args' ^.. each . packed)
          ("chpass": args') -> run $ changePassword args'
          ("addrole" : args') -> run $ addRole args'
          ("rmrole" : args') -> run $ removeRole args'

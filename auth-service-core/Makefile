@@ -8,8 +8,8 @@ build-env-file:=$(env-file)
 endif
 include $(build-env-file)
 
-.PHONY: all
-all: dist/openapi-gen dist/doc dist/openapi.json
+.PHONY: doc
+doc: dist/doc dist/openapi.json dist/openapi-internal.json
 
 srcfiles:=$(shell find src -type f)
 test-srcfiles = $(shell find test-suite -type f)
@@ -30,7 +30,11 @@ dist/doc: dist/openapi-gen
                dist/doc
 
 dist/openapi.json: dist/openapi-gen
-	dist/openapi-gen dist/openapi.json
+	dist/openapi-gen external dist/openapi.json
+
+dist/openapi-internal.json: dist/openapi-gen
+	dist/openapi-gen internal dist/openapi-internal.json
+
 
 # Tests
 #######

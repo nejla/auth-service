@@ -10,5 +10,9 @@ import System.IO
 main :: IO ()
 main = do
   getArgs >>= \case
-      [ path ] -> writeDefinition path
-      _ -> hPutStrLn stderr "Missing argument: filepath"
+      [ "external", path ] -> writeTranslatedDefinition path
+      [ "internal", path ] -> writeOriginalDefinition path
+      _ -> do
+        progName <- getProgName
+        hPutStrLn stderr $ "Usage: " <> progName <>" [external|internal] path"
+        exitFailure

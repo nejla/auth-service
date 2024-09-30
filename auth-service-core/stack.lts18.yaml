@@ -2,6 +2,8 @@ resolver: lts-18.12
 
 extra-deps:
   - base64-bytestring-1.2.0.1
+  - git: git@git.nejla.com:nejla-ab/common.git
+    commit: 00713d27493f04d88a5637968f65a0cd474cd9b8
 
 packages:
   - .

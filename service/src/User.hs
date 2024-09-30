@@ -46,6 +46,27 @@ addUser args = do
            "Usage: auth-service adduser <email> <password> <name> [<phone>]"
        exitFailure
 
+removeUser :: [Text] -> API ()
+removeUser args = do
+  case args of
+    [uidTxt] -> do
+      uid <- parseUUID uidTxt
+      count <- Backend.removeUser $ UserID uid
+      liftIO $ putStrLn (show count <> " users removed")
+    ["email", userEmail] -> do
+      getUserByEmail (Email userEmail) >>= \case
+        Nothing -> liftIO (putStrLn "0 users removed")
+        Just uid -> do
+          count <- Backend.removeUser (DB.userUuid uid)
+          liftIO $ putStrLn (show count <> " users removed")
+    _ -> liftIO $ do
+       hPutStrLn stderr
+           "Usage: auth-service rmuser (<uuid> | email <email>)"
+       exitFailure
+
+    -- ["email", email] -> do
+
+
 addRole :: [String] -> API ()
 addRole args = do
   case Text.pack <$> args of

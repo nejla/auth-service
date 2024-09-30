@@ -104,6 +104,21 @@ createUser usr = do
            }
        return $ Just uid
 
+removeUser :: UserID -> API Integer
+removeUser uid = do
+  runDB $ delete $ E.from $ \(usrInst :: SV DB.Token) -> do
+    whereL [usrInst E.^. DB.TokenUser ==. val uid]
+  runDB . delete $ E.from $ \(usrInst :: SV DB.UserInstance) -> do
+    whereL [usrInst E.^. DB.UserInstanceUser ==. val uid]
+  runDB . delete $ E.from $ \(usrInst :: SV DB.UserRole) -> do
+    whereL [usrInst E.^. DB.UserRoleUser ==. val uid]
+  runDB . delete $ E.from $ \(usrInst :: SV DB.PasswordResetToken) -> do
+    whereL [usrInst E.^. DB.PasswordResetTokenUser ==. val uid]
+  count <- runDB . deleteCount $ E.from $ \(usr :: SV DB.User) -> do
+    whereL [usr E.^. DB.UserUuid ==. val uid]
+  audit AuditUserRemoved { auditUserID = uid }
+  return $ fromIntegral count
+
 userAddRole :: UserID -> Text -> API ()
 userAddRole usr role = do
   _ <- runDB $ P.insert DB.UserRole { DB.userRoleUser = usr

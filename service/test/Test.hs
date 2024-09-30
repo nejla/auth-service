@@ -8,6 +8,9 @@
 
 -- | API tests
 
+--
+-- To run an individual testcase in ghci:
+-- > withTestDB case_{testcase}
 module Main where
 
 import           Control.Lens
@@ -150,6 +153,13 @@ case_create_user = withUser testUser $ \_uid run -> do
   case mbUsr of
     Nothing -> assertFailure "Did not get user"
     Just usr -> checkUser usr testUser
+
+case_remove_user :: Case ()
+case_remove_user = withUser testUser $ \uid run -> do
+  iid <- run $ addInstance Nothing "instance1"
+  run $ addUserInstance uid iid
+  count <- run $ removeUser uid
+  count `shouldBe` 1
 
 case_user_check_password :: Case ()
 case_user_check_password = withUser testUser $ \_uid run -> do
@@ -586,6 +596,7 @@ main :: IO ()
 main = withTestDB $ \pool -> do
   defaultMain . testGroup "main" $
        [ testCase "create user"                         $ case_create_user                          pool
+       , testCase "remove user"                         $ case_remove_user                          pool
        , testCase "user check password"                 $ case_user_check_password                  pool
        , testCase "user check password wrong"           $ case_user_check_password_wrong            pool
        , testCase "user email case insensitive"         $ case_user_email_case_insensitive          pool

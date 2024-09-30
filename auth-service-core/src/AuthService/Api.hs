@@ -3,13 +3,16 @@
 
 module AuthService.Api where
 
-import           AuthService.Types
-import           Data.Text         (Text)
-import           Servant.API       hiding (PostNoContent)
+import AuthService.Types
+import Data.Data           (Proxy(..))
+import Data.Text           (Text)
+import Servant.API         hiding (PostNoContent)
 
-import           SignedAuth
+import NejlaCommon.OpenApi ((:!), hasOperationIds)
 
-import           Compat            (PostNoContent)
+import SignedAuth
+
+import Compat              (PostNoContent)
 
 type LoginAPI = "login"
               :> ReqBody '[JSON] Login
@@ -117,12 +120,12 @@ type ReactivateUserAPI = "users"
 
 type AdminAPI = "admin"
                  :> Header "X-Token" B64Token
-                 :> (CreateUserAPI
-                      :<|> GetAllUsersAPI
-                      :<|> GetUsersByRolesAPI
-                      :<|> DeactivateUserAPI
-                      :<|> ReactivateUserAPI
-                      :<|> DeleteUserAPI
+                 :> (CreateUserAPI :! "createUser"
+                      :<|> GetAllUsersAPI :! "getAllUsers"
+                      :<|> GetUsersByRolesAPI :! "getUsersByRoles"
+                      :<|> DeactivateUserAPI :! "deactivateUser"
+                      :<|> ReactivateUserAPI :! "reactivateUser"
+                      :<|> DeleteUserAPI :! "deleteUser"
                     )
 
 --------------------------------------------------------------------------------
@@ -142,20 +145,25 @@ type ServiceAPI = "service"
 -- Interface
 --------------------------------------------------------------------------------
 
-type Api = SSOEnabledAPI
-           :<|> LoginAPI
-           :<|> SSOLoginAPI
-           :<|> SSOAssertAPI
-           :<|> CheckTokenAPI
-           :<|> PublicCheckTokenAPI
-           :<|> LogoutAPI
-           :<|> DisableSessionsAPI
-           :<|> ChangePasswordAPI
-           :<|> GetUserInstancesAPI
-           :<|> GetUserInfoAPI
+type Api = SSOEnabledAPI :! "ssoEnabled"
+           :<|> LoginAPI :! "login"
+           :<|> SSOLoginAPI :! "ssoLogin"
+           :<|> SSOAssertAPI :! "ssoAssert"
+           :<|> CheckTokenAPI :! "checkToken"
+           :<|> PublicCheckTokenAPI :! "publicCheckToken"
+           :<|> LogoutAPI :! "logout"
+           :<|> DisableSessionsAPI :! "disableSessions"
+           :<|> ChangePasswordAPI :! "changePassword"
+           :<|> GetUserInstancesAPI :! "getUserInstances"
+           :<|> GetUserInfoAPI :! "getUserInfo"
            :<|> AdminAPI
-           :<|> RequestPasswordResetAPI
-           :<|> PasswordResetAPI
-           :<|> PasswordResetInfoAPI
-           :<|> CreateAccountAPI
-           :<|> ServiceAPI
+           :<|> RequestPasswordResetAPI :! "requestPasswordReset"
+           :<|> PasswordResetAPI :! "passwordReset"
+           :<|> PasswordResetInfoAPI :! "passwordResetInfo"
+           :<|> CreateAccountAPI :! "createAccount"
+           :<|> ServiceAPI :! "service"
+
+
+-- Check that API has valid OpenAPI annotations
+_checkApi :: Proxy Api
+_checkApi = hasOperationIds (Proxy :: Proxy Api)
