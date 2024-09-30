@@ -5,7 +5,7 @@ resolver: lts-22.12
 
 extra-deps:
   - git: https://github.com/nejla/nejla-common.git
-    commit: f3a1d5bdd81ac56132d117f12aadcf50dbf7b2a6
+    commit: a24b377c97e5b7c0bc2828a0c2fcddf72d64cbb5
   - '../auth-service-core'
 
 allow-newer: true
