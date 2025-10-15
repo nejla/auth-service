@@ -308,6 +308,7 @@ them under `environment` in your `docker-compose.yml` files.
 
 | Option                 | Required | Type    | Default | Description                                                                                                                                                                                                                   |
 |------------------------|----------|---------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `LOG`        | No       | String | warn  | Minimum log level to display. Can be one of debug, info, warn or error |
 | `TOKEN_TIMEOUT`        | No       | Integer | Unset   | Time in seconds before a given token expire after the token was created. Only affects newly created tokens. Tokens don't expire if unset, unless the tokens expire because of `TOKEN_UNUSED_TIMEOUT` (see below).             |
 | `TOKEN_UNUSED_TIMEOUT` | No       | Integer | Unset   | Time in seconds before a given token expire after the token was last used. Making a request that causes a token to be checked counts as using the token. Affects all tokens. If unset, tokens don't expire from being unused. |
 

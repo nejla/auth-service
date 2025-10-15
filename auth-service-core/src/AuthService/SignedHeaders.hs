@@ -12,6 +12,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- Handling of signed headers in upstream application
 
@@ -35,9 +36,10 @@ module AuthService.SignedHeaders
   -- * Servant
   , AuthCredentials(..)
   , Requiredness(..)
-  , IsRole(..)
+  , MatchRole(..)
   , HasRole
   , RoleVisibility(..)
+  , AnyOf
    -- * Encoding headers
   , Sign.PrivateKey
   , Sign.mkKeys
@@ -56,6 +58,7 @@ import qualified Data.Aeson                      as Aeson
 import qualified Data.Aeson.TH                   as Aeson
 import           Data.IORef
 import qualified Data.List                       as List
+import           Data.List.NonEmpty              (NonEmpty(..))
 import           Data.Text                       (Text)
 import qualified Data.Text                       as Text
 import qualified Data.Text.Encoding              as Text
@@ -319,21 +322,18 @@ mkAuthHeader noncePool privKey authHeader = do
 -- Servant Combinators ---------------------------------------------------------
 --------------------------------------------------------------------------------
 
-class IsRole (t :: k) where
+class MatchRole (t :: k) where
   -- | How to represent roles (e.g. a Text token or a ADT value)
   type RoleRepr t
   -- | How to check if the user has an approriate role. Return the matching role
   -- if present
-  checkRole :: Proxy t -> [Text] -> Maybe (RoleRepr t)
+  matchRole :: Proxy t -> [Text] -> [RoleRepr t]
 
-instance KnownSymbol s => IsRole (s :: Symbol) where
+instance KnownSymbol s => MatchRole (s :: Symbol) where
   type RoleRepr s = Text
-  checkRole proxy roles =
+  matchRole proxy roles =
     let wantedHeader = Text.pack $ symbolVal proxy
-    in if wantedHeader `List.elem` roles
-       then Just wantedHeader
-       else Nothing
-
+    in [wantedHeader | wantedHeader `elem` roles]
 
 -- | Whether to pass on the role data to the handler
 data RoleVisibility = RoleVisible | RoleInvisible
@@ -368,12 +368,12 @@ data RoleVisibility = RoleVisible | RoleInvisible
 data HasRole (a :: k) (vis :: RoleVisibility)
 
 instance ( HasServer api context
-         , IsRole r
+         , MatchRole r
          , HasContextEntry context (Maybe AuthHeader)
          )
     => HasServer (HasRole r 'RoleVisible :> api) context where
   type ServerT (HasRole r 'RoleVisible :> api) m
-    = RoleRepr r -> ServerT api m
+    = NonEmpty (RoleRepr r) -> ServerT api m
 
   route Proxy context subserver =
     route (Proxy :: Proxy api) context (subserver `addAuthCheck` authCheck)
@@ -383,15 +383,15 @@ instance ( HasServer api context
          case mbAuthHeader of
            Nothing -> delayedFailFatal err401
            Just authHeader ->
-             case checkRole (Proxy :: Proxy r) (authHeader ^. roles) of
-               Nothing -> delayedFailFatal err403
-               Just role -> return role
+             case matchRole (Proxy :: Proxy r) (authHeader ^. roles) of
+               [] -> delayedFailFatal err403
+               (role:roles) -> return (role :| roles)
 
   hoistServerWithContext _ pc nt s =
     hoistServerWithContext (Proxy :: Proxy api) pc  nt . s
 
 instance ( HasServer api context
-         , IsRole r
+         , MatchRole r
          , HasContextEntry context (Maybe AuthHeader)
          )
     => HasServer (HasRole r 'RoleInvisible :> api) context where
@@ -406,9 +406,9 @@ instance ( HasServer api context
          case mbAuthHeader of
            Nothing -> delayedFailFatal err401
            Just authHeader ->
-             case checkRole (Proxy :: Proxy r) (authHeader ^. roles) of
-               Nothing -> delayedFailFatal err403
-               Just _role -> return ()
+             case matchRole (Proxy :: Proxy r) (authHeader ^. roles) of
+               [] -> delayedFailFatal err403
+               (_:_) -> return ()
 
        -- Adds auth check that doesn't return anything
        addAuthCheck_ Delayed{..} new =
@@ -427,3 +427,24 @@ instance OpenApi.HasOpenApi rest => OpenApi.HasOpenApi (HasRole r required :> re
   toOpenApi _ = OpenApi.toOpenApi (Proxy :: Proxy (Header "X-Auth" String :> rest))
 
 type instance IsElem' e (HasRole r required :> s) = IsElem e s
+
+-- | Matches any of the roles, e.g.
+-- AnyOf '[ "admin", "moderator" ]
+-- Roles are returned in the order they are specified,
+-- in the above example "admin" comes before "mederator"
+data AnyOf (a :: k)
+
+instance MatchRole r => MatchRole (AnyOf '[ r ]) where
+  type RoleRepr (AnyOf '[ r ]) = RoleRepr r
+  matchRole _ = matchRole (Proxy @r)
+
+instance {-# OVERLAPPABLE #-}
+         ( MatchRole r
+         , MatchRole (AnyOf rs)
+         , RoleRepr r ~ RoleRepr (AnyOf rs)
+         ) =>
+         MatchRole (AnyOf (r ': rs)) where
+  type RoleRepr (AnyOf (r ': rs)) = RoleRepr r
+  matchRole _prx role =
+    matchRole (Proxy :: Proxy r) role
+        ++ matchRole (Proxy :: Proxy (AnyOf rs)) role

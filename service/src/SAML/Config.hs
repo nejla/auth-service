@@ -64,7 +64,7 @@ getSamlConfig base inst = do
   conf <- readConfigFile conffilePath
   samlInstanceConfigAudience <- get "audience" conf
   let samlInstanceConfigRedirectAfterLogin = fromMaybe "/" $ Map.lookup "redirect_after_login" conf
-  samlInstanceConfigInstance <- get "instance" conf >>= \instTxt ->
+  samlInstanceConfigThisInstance <- get "instance" conf >>= \instTxt ->
     case UUID.fromText instTxt of
       Nothing -> do
         $logError [i|SAML: Could not read instance ID #{instTxt} for folder #{inst} as an UUID|]
@@ -109,7 +109,7 @@ getSamlConfig base inst = do
           $logError [i|Could not read SAML request signing key from #{requestSigningKey}:  #{show e}|]
           liftIO exitFailure
 
-  $logInfo [i|Got SAML configuration for instance #{samlInstanceConfigInstance}|]
+  $logInfo [i|Got SAML configuration for instance #{samlInstanceConfigThisInstance}|]
 
   samlInstanceConfigRequestSigningDigest
      <- case Map.lookup "request_signing_digest" conf of
@@ -120,9 +120,16 @@ getSamlConfig base inst = do
             $logError [i|Unknown request signing digest: #{d}|]
             liftIO exitFailure
 
+  let samlInstanceConfigNameAttribute = getDefault "name_attribute" conf "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname"
+      samlInstanceConfigEmailAttribute = getDefault "email_attribute" conf "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/email"
+      samlInstanceConfigInstanceAttribute = getDefault "instance_attribute" conf "instance"
+      samlInstanceConfigRoleAttribute = getDefault "role_attribute" conf "role"
   return SamlInstanceConfig{..}
 
   where
+    getDefault k m def = case Map.lookup k m of
+                  Just v -> v
+                  Nothing -> def
     get k m = case Map.lookup k m of
                   Just v -> return v
                   Nothing -> do
@@ -149,7 +156,7 @@ getConfigs basePath = do
       isDir <- liftIO $ Dir.doesDirectoryExist (basePath </> dir)
       if isDir then do
           conf <- getSamlConfig basePath dir
-          return $ Just (samlInstanceConfigInstance conf, conf)
+          return $ Just (samlInstanceConfigThisInstance conf, conf)
         else return Nothing
   return $ catMaybes configs
 

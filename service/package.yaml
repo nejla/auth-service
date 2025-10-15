@@ -62,7 +62,7 @@ library:
   - case-insensitive
   - configurator
   - containers
-  - cryptonite
+  - crypton
   - data-default
   - directory
   - esqueleto
@@ -95,7 +95,7 @@ library:
   - wai-saml2
   - warp
   - xml-conduit
-  - x509
+  - crypton-x509
   - zlib
 
 executables:

@@ -12,7 +12,7 @@ variables:
 
 build:
   stage: build
-  image: registry.nejla.com/nejla-ab/docker-images/nejla-build:84b46d4776ddc919cb4313f80fc1b8ded2a67622
+  image: registry.nejla.com/nejla-ab/docker-images/nejla-build:009b57f1353b82c346cb9f3847f11d8831d16732
   before_script:
     - eval $(ssh-agent -s)
     - ssh-add <(echo "$AUTHSERVICE_SSH_PRIVKEY")
@@ -36,7 +36,7 @@ build:
       - 'service/.stack-work'
     key: "auth-service"
 
-build-auth-service-proxy-image:
+build-auth-service-web-image:
   stage: build-images
   variables:
     IMAGE_NAME: auth-service-proxy

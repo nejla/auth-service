@@ -225,13 +225,13 @@ makeLensesWith camelCaseFields ''ReturnInstance
 
 data ReturnUserInfo =
   ReturnUserInfo
-  { returnUserInfoId         :: Text
-  , returnUserInfoEmail      :: Email
-  , returnUserInfoName       :: Name
-  , returnUserInfoPhone      :: Maybe Phone
-  , returnUserInfoInstances  :: [ReturnInstance]
-  , returnUserInfoRoles      :: [Text]
-  , returnUserInfoDeactivate :: Maybe UTCTime
+  { returnUserInfoId            :: Text
+  , returnUserInfoEmail         :: Email
+  , returnUserInfoName          :: Name
+  , returnUserInfoPhone         :: Maybe Phone
+  , returnUserInfoInstances     :: [ReturnInstance]
+  , returnUserInfoRoles         :: [Text]
+  , returnUserInfoDeactivatedAt :: Maybe UTCTime
   }
     deriving (Generic,  Show )
     deriving ( ToJSON, FromJSON

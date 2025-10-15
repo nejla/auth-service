@@ -117,12 +117,24 @@ data SamlInstanceConfig =
   , samlInstanceConfigAllowUnencrypted :: Bool
   , samlInstanceConfigSigningKey :: RSA.PublicKey
   , samlInstanceConfigAudience :: Text
-  , samlInstanceConfigInstance :: InstanceID
+  , samlInstanceConfigThisInstance :: InstanceID
   , samlInstanceConfigIdPBaseUrl :: Text
   , samlInstanceConfigRedirectAfterLogin :: Text
   , samlInstanceConfigAllowUnsolicited :: Bool
   , samlInstanceConfigRequestSigningKey :: Maybe RSA.PrivateKey
   , samlInstanceConfigRequestSigningDigest :: RequestSigningDigest
+  -- Expected attribute for name property (e.g. "name" or "displayname")
+  -- Default: "displayname"
+  , samlInstanceConfigNameAttribute :: Text
+  -- Expected attribute for email property (e.g. "email" or "emailaddress")
+  -- Default: "emailaddress"
+  , samlInstanceConfigEmailAttribute :: Text
+  -- Expected attribute for instance property
+  -- Default: "instance"
+  , samlInstanceConfigInstanceAttribute :: Text
+  -- Expected attribute for role property
+  -- Default: "role"
+  , samlInstanceConfigRoleAttribute :: Text
   } deriving Show
 
 data SamlConfig =
@@ -169,3 +181,4 @@ makeLensesWith camelCaseFields ''Secrets
 makeLensesWith camelCaseFields ''EmailConfig
 makeLensesWith camelCaseFields ''SendmailConfig
 makeLensesWith camelCaseFields ''TwilioConfig
+makeLensesWith camelCaseFields ''SamlInstanceConfig

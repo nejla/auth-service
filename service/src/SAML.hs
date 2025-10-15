@@ -11,6 +11,7 @@ module SAML
 
 where
 
+import           Control.Lens                     ((^.))
 import           Control.Monad.Except
 import           Control.Monad                    (unless)
 import           Control.Monad.Trans              (MonadIO, lift, liftIO)
@@ -42,6 +43,7 @@ import           SAML.Keycloak                    (readConfig)
 import qualified SAML.Keycloak                    as Keycloak
 import           SAML.Keys
 
+
 import           AuthService.Types
 
 import           Audit
@@ -59,12 +61,16 @@ mkSamlConfig :: ByteString -> ByteString -> Either String SAML.SAML2Config
 mkSamlConfig privkeyPem pubkeyPem = do -- Either String
   privateKey <- parsePrivateKeyPem privkeyPem
   publicKey <- parsePubkeyPem pubkeyPem
-  return $ SAML.saml2Config privateKey publicKey
+  return $ (SAML.saml2Config privateKey publicKey)
+    { SAML.saml2ValidationTarget = SAML.ValidateEither
+    }
 keycloakConf2SamlConf :: Keycloak.SamlConfig -> SAML.SAML2Config
 
 keycloakConf2SamlConf cfg = do
-   SAML.saml2Config (Keycloak.encryptionPrivate cfg)
-                    (Keycloak.signingPublic cfg)
+   (SAML.saml2Config (Keycloak.encryptionPrivate cfg)
+                    (Keycloak.signingPublic cfg))
+     { SAML.saml2ValidationTarget = SAML.ValidateEither
+     }
 
 config2SamlConf :: SamlInstanceConfig -> SAML.SAML2Config
 config2SamlConf cfg =
@@ -73,6 +79,7 @@ config2SamlConf cfg =
                    { SAML.saml2RequireEncryptedAssertion =
                        not (samlInstanceConfigAllowUnencrypted cfg)
                    , SAML.saml2Audiences = [ samlInstanceConfigAudience cfg ]
+                   , SAML.saml2ValidationTarget = SAML.ValidateEither
                    }
 
 --------------------------------------------------------------------------------
@@ -245,13 +252,13 @@ ssoAssertHandler cfg response = runExceptT $ do
             Log.logError [i|Duplicate SAML attribute: #{name'}|]
             throwError SSOInvalid
 
-  email <- getAttr "email"
-  userName <- getAttr "name"
+  email <- getAttr (cfg ^. emailAttribute)
+  userName <- getAttr (cfg ^. nameAttribute)
   let userId = SAML.nameIDValue . SAML.subjectNameID $ SAML.assertionSubject assertion
-  role <- getAttrs "role"
+  role <- getAttrs (cfg ^. roleAttribute)
   instanceId <-
-    case Map.lookup "instanceId" attrs of
-      Nothing -> return $ samlInstanceConfigInstance cfg
+    case Map.lookup (cfg ^. instanceAttribute) attrs of
+      Nothing -> return $ samlInstanceConfigThisInstance cfg
       Just [instTxt] | Just inst <- UUID.fromText instTxt -> return $ InstanceID inst
                      | otherwise -> do
                          Log.logError $ "Could not parse SAML instance id "

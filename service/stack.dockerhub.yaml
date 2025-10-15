@@ -1,11 +1,12 @@
 # stack.yaml for use by dockerhub
 # This file should correspond to stack.yaml
 
-resolver: lts-22.12
+resolver: lts-22.44
 
 extra-deps:
   - git: https://github.com/nejla/nejla-common.git
     commit: a24b377c97e5b7c0bc2828a0c2fcddf72d64cbb5
   - '../auth-service-core'
+  - wai-saml2-0.7.0
 
 allow-newer: true

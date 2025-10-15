@@ -355,7 +355,7 @@ checkUserPassword userEmail pwd = do
   mbUser <- getUserByEmail userEmail
   now <- liftIO getCurrentTime
   case mbUser of
-    Just usr | Just deac <- usr ^. deactivate
+    Just usr | Just deac <- usr ^. DB.deactivate
              , deac <= now
                -> return $ Left LoginErrorFailed
              | otherwise -> do
@@ -728,7 +728,7 @@ getUserInfo token'
                                   , returnInstanceId = iid
                                   }]
                             , returnUserInfoRoles = roles
-                            , returnUserInfoDeactivate = Nothing
+                            , returnUserInfoDeactivatedAt = Nothing
                             }
   | otherwise = do
   mbUser <- getUserByToken token'
@@ -742,7 +742,7 @@ getUserInfo token'
                           , returnUserInfoPhone = user' ^. phone
                           , returnUserInfoInstances = instances'
                           , returnUserInfoRoles = roles
-                          , returnUserInfoDeactivate = user' ^. deactivate
+                          , returnUserInfoDeactivatedAt = user' ^. DB.deactivate
                           }
 
 isSsoToken :: B64Token -> Bool
@@ -941,7 +941,7 @@ getUsersBy selector = do
     , returnUserInfoPhone      = userPhone
     , returnUserInfoInstances  = zipWith ReturnInstance instanceNames instanceIDs
     , returnUserInfoRoles      = roles
-    , returnUserInfoDeactivate = userDeactivate
+    , returnUserInfoDeactivatedAt = userDeactivate
     }
  where
    for = flip fmap

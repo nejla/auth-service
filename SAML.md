@@ -65,10 +65,10 @@ that should have SAML enabled.
     assertions.
   * `certificate.pem`: IdP's PEM-encoded X509 signing certificate. Used to check
     signed assertions. (the "realm certificate")
-  * `config`: a simple "key=value" encoded configuration for the instance, with
-    the following fields:
   * `request-signing.key.pem` (optional): RSA private key file for signing authn
     requests. If this file is missing, requests signing is disabled.
+  * `config`: a simple "key=value" encoded configuration for the instance, with
+    the following fields:
 
 |Option|Required|Type|Default|Description|
 |------|--------|----|-------|-----------|
@@ -78,7 +78,11 @@ that should have SAML enabled.
 |`redirect_after_login`| No| String| `/`| URL to redirect after SAML login succeeds|
 |`allow_unencrypted_assertions`| No| Boolean| false| Accept unencrypted assertions from the IdP (encrypted assertions are always accepted). Note that the encryption key still needs to be set.|
 |`allow_unsolicited_responses`| No| Boolean| false| Accept unsolicited auth responses,e.g. IdP-initiated SSO.|
-|`request_signing_digest`| No| String | sha256 | Digest to use when signing authentication requests. Has to be one of `sha1` or `sha256` but the use of `sha1` is discouraged.
+|`request_signing_digest`| No| String | sha256 | Digest to use when signing authentication requests. Has to be one of `sha1` or `sha256` but the use of `sha1` is discouraged.|
+|`name_attribute` | No | String | `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname` | Which SAML attribute contains the full name |
+|`email_attribute` | No | String | `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/email` | The SAML attribute that contains the email address|
+|`instance_attribute` | No | String | `instance` | The SAML attribute that contains the instance (Note that this token is always optional)|
+|`role_attribute` | No | String | `role` | The SAML attribute that contains (0 or more) roles|
 
 Example for the `config` file:
 ```

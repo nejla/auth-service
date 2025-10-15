@@ -127,8 +127,8 @@ runMain = do
            liftIO $ Warp.run 80 (logM $ serveAPI pool noncePool conf secrets)
          _ -> liftIO $ do
              hPutStrLn stderr
-               "Usage: auth-service [run|adduser|chpass|addrole|rmrole|newinstance|addinstance|removeinstance|\
-               \deactivateuser|eeactivateuser] [options]"
+               "Usage: auth-service [run|adduser|rmuser|chpass|addrole|rmrole|newinstance|addinstance|removeinstance|\
+               \deactivateuser|reactivateuser] [options]"
              exitFailure
 
   where
