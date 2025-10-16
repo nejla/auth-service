@@ -1,27 +1,13 @@
 # Dockerfile that builds the service from source
 # E.g. for publication on Dockerhub
 
-FROM haskell:9.6.4 as build
-
-RUN export DEBIAN_FRONTEND=noninteractive && \
-    apt-get update && \
-    apt-get -y install \
-      libpq-dev
-
-COPY service /service
-COPY auth-service-core /auth-service-core
-
-WORKDIR /service
-
-RUN mkdir /dist && \
-    stack --stack-yaml stack.dockerhub.yaml build --install-ghc --copy-bins --local-bin-path /dist -j2
-
-FROM ubuntu:jammy
-
-RUN export DEBIAN_FRONTEND=noninteractive && \
-    apt-get update && \
-    apt-get -y install \
-      build-essential \
+FROM docker.io/debian:13 AS baseimage
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Stockholm
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
+    apt-get install --no-install-recommends -y \
+      ca-certificates \
       curl \
       libgmp10 \
       libicu-dev \
@@ -29,18 +15,74 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
       libxml2-dev \
       locales \
       msmtp-mta \
+      netcat-openbsd \
+      openssh-client \
+      && \
+    rm -fr /var/lib/apt/lists/* && \
+    localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+ENV LANG=C.UTF-8
+ENV TZ=Europe/Stockholm
+
+# Image for building, base + build tools. Usable as a base layer for later build
+# steps in this Dockerfile or for running stack
+FROM baseimage AS buildimage
+ARG GO_TASK_SHA256=b6725faf62ae793d147b70e203fca047c01920807376f9c54d2e9d4211314b81
+ARG GO_TASK_VERSION=3.45.4
+ARG ORMOLU_FILENAME=ormolu-Linux.zip
+ARG ORMOLU_SHA256=f737b11835537d020d83a497903a392f19d4943aea03b75f76f1c5719d70f9f8
+ARG ORMOLU_VERSION=0.7.4.0
+ARG STACK_RESOLVER=lts-22.44
+ARG STACK_SHA256=b6df9168d471d917d955ee80553562ca2b0b3b1aa61cd1256199406c2d8c4eb4
+ARG STACK_VERSION=3.7.1
+ARG STACK_BIN=stack-${STACK_VERSION}-linux-x86_64
+RUN apt-get update -y && \
+    apt-get install --no-install-recommends -y \
+      dpkg-dev \
+      g++ \
+      gcc \
+      git \
+      gnupg \
+      libc6-dev \
+      libffi-dev \
+      libgmp-dev \
+      libnuma-dev \
+      libtinfo-dev \
+      make \
+      netbase \
       pkg-config \
-      ssh-client && \
-    locale-gen en_US.UTF-8
+      unzip \
+      xz-utils \
+      zlib1g-dev \
+      && \
+    rm -fr /var/lib/apt/lists/*
+# Install stack
+RUN curl -L "https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_BIN}.tar.gz" \
+      -o "${STACK_BIN}.tar.gz" && \
+    echo "${STACK_SHA256} ${STACK_BIN}.tar.gz" sha256sum -c - && \
+    tar -xf ${STACK_BIN}.tar.gz && \
+    install -T "${STACK_BIN}/stack" /usr/bin/stack && \
+    rm "${STACK_BIN}.tar.gz" && \
+    rm -r "${STACK_BIN}"
+# Install GHC
+RUN stack --resolver $STACK_RESOLVER setup
+# Install Ormolu by version
+RUN curl -L "https://github.com/tweag/ormolu/releases/download/${ORMOLU_VERSION}/${ORMOLU_FILENAME}" -o ormolu-x86_64-linux.zip && \
+    echo "${ORMOLU_SHA256} ormolu-x86_64-linux.zip" sha256sum -c - && \
+    unzip ormolu-x86_64-linux.zip && \
+    install -T ./ormolu "/usr/bin/ormolu" && \
+    rm ormolu-x86_64-linux.zip
 
-ENV LC_ALL=en_US.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LANGUAGE=en_US.UTF-8
-ENV PATH=/app:$PATH
 
+FROM buildimage AS build
+COPY service /service
+COPY auth-service-core /auth-service-core
+WORKDIR /service
+RUN mkdir /dist && \
+    stack --stack-yaml stack.dockerhub.yaml build --install-ghc --copy-bins --local-bin-path /dist -j2
+
+FROM baseimage
 EXPOSE 80
-
 COPY --from=build /dist/auth-service /app/auth-service
-
+ENV PATH=/app:$PATH
 CMD ["auth-service", "run"]
 HEALTHCHECK CMD curl --fail "http://localhost/status"
