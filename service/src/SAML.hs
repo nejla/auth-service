@@ -229,7 +229,7 @@ ssoAssertHandler cfg response = runExceptT $ do
   lift $ storeAssertionID (SAML.assertionId assertion) -- this can throw conflict
 
   let attrs = Map.fromListWith (++)
-                 [(SAML.attributeName attr, [SAML.attributeValue attr])
+                 [(SAML.attributeName attr, SAML.attributeValues attr)
                  | attr <- SAML.assertionAttributeStatement assertion
                  ]
 
