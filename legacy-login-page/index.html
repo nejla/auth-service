@@ -1,0 +1,130 @@
+<html ng-app="authenticate" ng-controller="AuthenticateController">
+  <!-- Copyright © 2015-2022 Nejla AB. All rights reserved. -->
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <title>Logga in</title>
+    <link href="/libs.css" rel="stylesheet" type="text/css" />
+    <script src="/libs.js" type="text/javascript"></script>
+    <script type="text/javascript">
+(function () {
+    'use strict';
+
+    var app = angular.module('authenticate', ['ui.bootstrap']);
+
+    app.factory('AuthenticationService', ['$http', '$rootScope', function ($http, $rootScope) {
+        var authenticated = false;
+
+        return {
+            login: function (user, password, otp) {
+                var data = {
+                    password: password,
+                    user: user
+                };
+
+                if (otp !== null) {
+                    data.otp = otp;
+                }
+
+                return $http.post('/api/login', data).then(function (result) {
+                    $rootScope.session = result;
+                    $rootScope.$broadcast('loginSucceeded', result);
+                    if (!authenticated) {
+                        authenticated = true;
+                        $rootScope.$broadcast('authenticated');
+                    }
+                    return result;
+                }, function (error) {
+                    if (error.status === 499) {
+                        $rootScope.$broadcast('otpRequired');
+                    } else {
+                        $rootScope.$broadcast('loginFailed', error);
+                    }
+                    return error;
+                });
+            },
+            logout: function () {
+                return $http.post('/api/logout').then(function (result) {
+                    $rootScope.session = null;
+                    $rootScope.$broadcast('logoutSucceeded', result);
+                    if (authenticated) {
+                        authenticated = false;
+                        $rootScope.$broadcast('notAuthenticated');
+                    }
+                    return result;
+                }, function (error) {
+                    $rootScope.$broadcast('logoutFailed', error);
+                    return error;
+                });
+            }
+        };
+    }]);
+
+    app.controller('AuthenticateController', ['$http', '$scope', '$q', '$timeout', '$window', 'AuthenticationService', function ($http, $scope, $q, $timeout, $window, AuthenticationService) {
+        $scope.authenticate = {
+            cancel: function () {
+                $scope.authenticate.otp = null;
+                $timeout(function () { document.getElementById("authenticate-user").focus(); });
+            },
+            otp: null,
+            sso: false,
+            submit: function () {
+                AuthenticationService.login($scope.authenticate.user, $scope.authenticate.password, $scope.authenticate.otp);
+            }
+        };
+
+        $scope.$on('loginSucceeded', function () {
+            $window.location.reload(true);
+        });
+
+        $scope.$on('otpRequired', function () {
+            $scope.authenticate.otp = '';
+            $timeout(function () { document.getElementById("authenticate-otp").focus(); });
+        });
+
+        $scope.$on('loginFailed', function () {
+            $scope.authenticate.error = "Felaktigt användarnamn och/eller lösenord.";
+        });
+
+        $q.when(fetch('/api/sso/login', { redirect: "manual" }))
+            .then(function (response) {
+                if (response.type === "opaqueredirect") {
+                    $scope.authenticate.sso = true;
+                } else {
+                    $scope.authenticate.sso = false;
+                }
+            });
+    }]);
+})();
+    </script>
+  </head>
+  <body style="-moz-background-size: cover; -o-background-size: cover; -webkit-background-size: cover; background: url(/background.jpg) no-repeat center center fixed; background-size: cover;">
+    <div class="container">
+      <div class="panel panel-default" style="margin: 3em auto 0px; padding: 0.6em; width: 24em;">
+        <form name="authenticate.form" ng-submit="authenticate.submit()" style="margin-bottom: 0;">
+          <div class="panel-body">
+            <div class="form-group">
+              <label for="authenticate-user">E-postadress</label>
+              <input autofocus class="form-control" id="authenticate-user" ng-disabled="authenticate.otp !== null" ng-model="authenticate.user" placeholder="E-postadress" required type="text">
+            </div>
+            <div class="form-group">
+              <label for="authenticate-password">Lösenord</label>
+              <input autocomplete="new-password" class="form-control" id="authenticate-password" ng-disabled="authenticate.otp !== null" ng-model="authenticate.password" placeholder="Lösenord" required type="password">
+            </div>
+            <div class="form-group" ng-if="authenticate.otp !== null">
+              <label for="authenticate-otp">SMS-kod</label>
+              <input autocomplete="off" class="form-control" id="authenticate-otp" ng-model="authenticate.otp" placeholder="SMS-kod" required type="password">
+            </div>
+            <uib-alert ng-if="authenticate.error" style="margin-bottom: 15px;" type="danger">{{authenticate.error}}</uib-alert>
+            <button class="btn btn-primary" ng-disabled="!authenticate.form.$valid" type="submit">Logga in</button>
+            <button class="btn btn-warning" ng-click="authenticate.cancel()" ng-if="authenticate.otp !== null" style="float: right;" type="button">Avbryt</button>
+            <p style="margin-bottom: 0; margin-top: 1.5em; text-align: center;">
+              <span ng-if="authenticate.sso === null">&nbsp;<!-- Undersöker förutsättningarna för single sign-on... --></span>
+              <a href="/api/sso/login" ng-if="authenticate.sso === true">Klicka här för att logga in med SAML 2.0</a>
+              <span ng-if="authenticate.sso === false" style="color: grey;">SAML 2.0 är inte tillgängligt</span>
+            </p>
+          </div>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
