@@ -1,32 +1,31 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TemplateHaskell #-}
 
-module Monad
-  ( module Monad
-  , AuditEvent(..)
-  )
-where
+module Monad (
+  module Monad,
+  AuditEvent (..),
+) where
 
-import           Control.Lens
-import           Control.Monad.Reader
-import           Data.Default         (def)
-import           Database.Persist.Sql
-import qualified NejlaCommon          as NC
-
-import           Types
-import           Audit
-
-import qualified SignedAuth
+import Audit
+import Control.Lens
+import Control.Monad.Reader
+import Data.Default (def)
+import Database.Persist.Sql
+import NejlaCommon qualified as NC
+import SignedAuth qualified
+import Types
 
 --------------------------------------------------------------------------------
 -- Api Monad -------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
 type Ctx = ApiState
-data ApiState = ApiState { apiStateConfig :: Config
-                         , apiStateAuditSource :: AuditSource
-                         , apiStateNoncePool :: SignedAuth.NoncePool
-                         }
+
+data ApiState = ApiState
+  { apiStateConfig :: Config
+  , apiStateAuditSource :: AuditSource
+  , apiStateNoncePool :: SignedAuth.NoncePool
+  }
 
 makeLensesWith camelCaseFields ''ApiState
 
@@ -35,13 +34,16 @@ type API = NC.App ApiState 'NC.Privileged 'NC.ReadCommitted
 runDB :: ReaderT SqlBackend IO a -> API a
 runDB = NC.db'
 
-getConfig ::  Lens' Config a -> API a
+getConfig :: Lens' Config a -> API a
 getConfig g = NC.viewState $ config . g
 
 runAPI :: ConnectionPool -> ApiState -> API a -> IO a
 runAPI pool st m =
-  NC.runApp' (def & NC.useTransactionLevels .~ (st ^. config . useTransactionLevels))
-             pool st m
+  NC.runApp'
+    (def & NC.useTransactionLevels .~ (st ^. config . useTransactionLevels))
+    pool
+    st
+    m
 
 audit :: AuditEvent -> API ()
 audit event = do

@@ -2,54 +2,52 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Config
-  ( module NejlaCommon.Config
-  , module Config
-  ) where
+module Config (
+  module NejlaCommon.Config,
+  module Config,
+) where
 
-import           Control.Lens                     ((^.))
-import           Control.Monad                    (when)
-import qualified Control.Monad.Catch              as Ex
-import           Control.Monad.Logger
-import           Control.Monad.Trans
-import qualified Data.Aeson                       as Aeson
-import qualified Data.ByteString                  as BS
-import qualified Data.ByteString.Char8            as BS8
-import qualified Data.Char                        as Char
-import qualified Data.Configurator.Types          as Conf
-import           Data.Default                     (def)
-import           Data.Maybe                       (maybeToList)
-import           Data.String.Interpolate.IsString (i)
-import qualified Data.Text                        as Text
-import qualified Data.Text.Encoding               as Text
-import           Data.Text.Encoding.Error         (lenientDecode)
-import qualified Data.Text.Lazy                   as LText
-import qualified Data.Text.Lazy.IO                as LText
-import           Data.UUID                        (UUID)
-import qualified Data.UUID                        as UUID
-import qualified Network.Mail.Mime                as Mail
-import qualified SignedAuth
-import           System.Exit                      (exitFailure)
-import qualified System.Exit                      as Exit
-import           System.IO                        (hPutStrLn, stderr)
-import           System.IO.Error                  (isDoesNotExistError, isPermissionError)
-import qualified System.Posix.Files               as Posix
-import qualified Text.Microstache                 as Mustache
-import qualified Twilio
-
-import           Types
-import           Util
-
-import           NejlaCommon.Config               hiding (Config)
-import           SAML.Config
+import Control.Lens ((^.))
+import Control.Monad (when)
+import Control.Monad.Catch qualified as Ex
+import Control.Monad.Logger
+import Control.Monad.Trans
+import Data.Aeson qualified as Aeson
+import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as BS8
+import Data.Char qualified as Char
+import Data.Configurator.Types qualified as Conf
+import Data.Default (def)
+import Data.Maybe (maybeToList)
+import Data.String.Interpolate.IsString (i)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Data.Text.Encoding.Error (lenientDecode)
+import Data.Text.Lazy qualified as LText
+import Data.Text.Lazy.IO qualified as LText
+import Data.UUID (UUID)
+import Data.UUID qualified as UUID
+import NejlaCommon.Config hiding (Config)
+import Network.Mail.Mime qualified as Mail
+import SAML.Config
+import SignedAuth qualified
+import System.Exit (exitFailure)
+import System.Exit qualified as Exit
+import System.IO (hPutStrLn, stderr)
+import System.IO.Error (isDoesNotExistError, isPermissionError)
+import System.Posix.Files qualified as Posix
+import Text.Microstache qualified as Mustache
+import Twilio qualified
+import Types
+import Util
 
 --------------------------------------------------------------------------------
 -- Configuration
@@ -59,168 +57,204 @@ instance Conf.Configured UUID where
   convert (Conf.String txt) = UUID.fromText txt
   convert _ = Nothing
 
-getTwilioConfig :: (MonadIO m, MonadLogger m) =>
-                   Conf.Config
-                -> m (Maybe TwilioConfig)
+getTwilioConfig
+  :: (MonadIO m, MonadLogger m)
+  => Conf.Config
+  -> m (Maybe TwilioConfig)
 getTwilioConfig conf = do
-    mbAccount <- getConfMaybe "TWILIO_ACCOUNT" "twilio.account" conf
-    mbAuthToken <- getConfMaybe "TWILIO_TOKEN" "twilio.token" conf
-    mbSourceNumber <- getConfMaybe "TWILIO_SOURCE" "twilio.source" conf
-    case (mbAccount, mbAuthToken, mbSourceNumber) of
-        (Nothing, Nothing, Nothing) -> return Nothing
-        (Just acc, Just authT, Just sourceNo) ->
-            return $ Just TwilioConfig { twilioConfigAccount = acc
-                                       , twilioConfigAuthToken = authT
-                                       , twilioConfigSourceNumber = sourceNo
-                                       }
-        _ -> do
-            $logError "Twilio config is incomplete"
-            liftIO Exit.exitFailure
+  mbAccount <- getConfMaybe "TWILIO_ACCOUNT" "twilio.account" conf
+  mbAuthToken <- getConfMaybe "TWILIO_TOKEN" "twilio.token" conf
+  mbSourceNumber <- getConfMaybe "TWILIO_SOURCE" "twilio.source" conf
+  case (mbAccount, mbAuthToken, mbSourceNumber) of
+    (Nothing, Nothing, Nothing) -> return Nothing
+    (Just acc, Just authT, Just sourceNo) ->
+      return $
+        Just
+          TwilioConfig
+            { twilioConfigAccount = acc
+            , twilioConfigAuthToken = authT
+            , twilioConfigSourceNumber = sourceNo
+            }
+    _ -> do
+      $logError "Twilio config is incomplete"
+      liftIO Exit.exitFailure
 
-get2FAConf :: (MonadLogger m, MonadIO m) =>
-              Conf.Config
-           -> m (Bool, Maybe TwilioConfig)
+get2FAConf
+  :: (MonadLogger m, MonadIO m)
+  => Conf.Config
+  -> m (Bool, Maybe TwilioConfig)
 get2FAConf conf = do
-     tfaRequired <- getConfBool "TFA_REQUIRED" "tfa.required" (Right False) conf
-     twilioConf <- getTwilioConfig conf
-     case (tfaRequired, twilioConf) of
-      (True, Nothing) -> do
-          $logError "Two Factor Authentication is required, but Twilio is not configured"
-          liftIO Exit.exitFailure
-      _ -> return (tfaRequired, twilioConf)
+  tfaRequired <- getConfBool "TFA_REQUIRED" "tfa.required" (Right False) conf
+  twilioConf <- getTwilioConfig conf
+  case (tfaRequired, twilioConf) of
+    (True, Nothing) -> do
+      $logError "Two Factor Authentication is required, but Twilio is not configured"
+      liftIO Exit.exitFailure
+    _ -> return (tfaRequired, twilioConf)
 
-
-getAccountCreationConfig ::
-     (MonadLogger m, MonadIO m) => Conf.Config -> m AccountCreationConfig
+getAccountCreationConfig
+  :: (MonadLogger m, MonadIO m) => Conf.Config -> m AccountCreationConfig
 getAccountCreationConfig conf = do
   accountCreationConfigEnabled <-
     getConfBool "ACCOUNT_CREATION" "account_creation.enabled" (Right False) conf
   accountCreationConfigDefaultInstances <-
-    fmap InstanceID . maybeToList <$>
-    getConfGenericMaybe
-      (UUID.fromText . Text.pack)
-      "DEFAULT_INSTANCE"
-      "default-instance"
-      conf
+    fmap InstanceID . maybeToList
+      <$> getConfGenericMaybe
+        (UUID.fromText . Text.pack)
+        "DEFAULT_INSTANCE"
+        "default-instance"
+        conf
   return AccountCreationConfig{..}
 
-readSignedHeaderKey :: MonadIO m => FilePath -> m SignedAuth.PrivateKey
+readSignedHeaderKey :: (MonadIO m) => FilePath -> m SignedAuth.PrivateKey
 readSignedHeaderKey path = liftIO $ do
   isPipe <- Posix.isNamedPipe <$> Posix.getFileStatus path
-  keyBS <- Ex.catch (stripEnd <$> BS.readFile path)
-    ( \(e :: IOError) -> do
-      if
-        | isDoesNotExistError e  ->
-            hPutStrLn stderr
-            $ path ++ " does not exist. Please create it before starting"
-        | isPermissionError e ->
-            hPutStrLn stderr
-            $ "Permission error reading " ++ path ++ ". Please check permissions"
-        | otherwise ->
-            hPutStrLn stderr
-            $ path ++ " could not be read. Encountered error: " ++ show e
-            ++ "."
-      exitFailure)
+  keyBS <-
+    Ex.catch
+      (stripEnd <$> BS.readFile path)
+      ( \(e :: IOError) -> do
+          if
+            | isDoesNotExistError e ->
+                hPutStrLn stderr $
+                  path ++ " does not exist. Please create it before starting"
+            | isPermissionError e ->
+                hPutStrLn stderr $
+                  "Permission error reading " ++ path ++ ". Please check permissions"
+            | otherwise ->
+                hPutStrLn stderr $
+                  path
+                    ++ " could not be read. Encountered error: "
+                    ++ show e
+                    ++ "."
+          exitFailure
+      )
   when (BS.null keyBS && isPipe) $ do
-    hPutStrLn stderr $ path ++ " is a named pipe and is empty.\
-                               \ Did you forget to write the secret to it?"
+    hPutStrLn stderr $
+      path
+        ++ " is a named pipe and is empty.\
+           \ Did you forget to write the secret to it?"
     exitFailure
 
   case SignedAuth.readPrivateKeyDer keyBS of
     Left e -> liftIO $ do
-      hPutStrLn stderr $ "Could not parse DER-encoded key: \""
-        ++ Text.unpack (Text.decodeUtf8With lenientDecode keyBS)
-        ++ "\" reason: " ++ e
+      hPutStrLn stderr $
+        "Could not parse DER-encoded key: \""
+          ++ Text.unpack (Text.decodeUtf8With lenientDecode keyBS)
+          ++ "\" reason: "
+          ++ e
       exitFailure
     Right r -> return r
-  where
-    stripEnd bs =
-      let (bs', _end) = BS8.spanEnd Char.isSpace bs
-      in bs'
+ where
+  stripEnd bs =
+    let (bs', _end) = BS8.spanEnd Char.isSpace bs
+     in bs'
 
-
-
-getAuthServiceConfig :: (MonadIO m, MonadLogger m) =>
-                        Conf.Config
-                     -> m Config
+getAuthServiceConfig
+  :: (MonadIO m, MonadLogger m)
+  => Conf.Config
+  -> m Config
 getAuthServiceConfig conf = do
-    to <- getConfMaybe' "TOKEN_TIMEOUT" "token.timeout" conf
-    tuto <- getConfMaybe' "TOKEN_UNUSED_TIMEOUT" "token.unused-timeout" conf
+  to <- getConfMaybe' "TOKEN_TIMEOUT" "token.timeout" conf
+  tuto <- getConfMaybe' "TOKEN_UNUSED_TIMEOUT" "token.unused-timeout" conf
 
-    configMaxAttempts <- getConf' "MAX_LOGIN_ATTEMPTS" "max-login-attempts"
-                           (Right 5) conf
-    configAttemptsTimeframe <- fromInteger <$> getConf'
-                                 "LOGIN_RATE_TIMEFRAME_SECONDS"
-                                 "login-attempts-timeframe-seconds"
-                                 (Right 60) conf
-    otpl <- getConf' "OTP_LENGTH" "otp.length"
-                 (Right 4) conf
-    otpt <- getConf' "OTP_TIMEOUT" "otp.timeout"
-                 (Right 300) conf
-    (tfaRequired, twilioConf) <- get2FAConf conf
-    haveEmail <- setEmailConf conf
-    let configOtp = fmap Twilio.sendMessage twilioConf
-    accountCreationConfig <- getAccountCreationConfig conf
+  configMaxAttempts <-
+    getConf'
+      "MAX_LOGIN_ATTEMPTS"
+      "max-login-attempts"
+      (Right 5)
+      conf
+  configAttemptsTimeframe <-
+    fromInteger
+      <$> getConf'
+        "LOGIN_RATE_TIMEFRAME_SECONDS"
+        "login-attempts-timeframe-seconds"
+        (Right 60)
+        conf
+  otpl <-
+    getConf'
+      "OTP_LENGTH"
+      "otp.length"
+      (Right 4)
+      conf
+  otpt <-
+    getConf'
+      "OTP_TIMEOUT"
+      "otp.timeout"
+      (Right 300)
+      conf
+  (tfaRequired, twilioConf) <- get2FAConf conf
+  haveEmail <- setEmailConf conf
+  let configOtp = fmap Twilio.sendMessage twilioConf
+  accountCreationConfig <- getAccountCreationConfig conf
 
-    samlConfig <- getSAMLConfig conf
+  samlConfig <- getSAMLConfig conf
 
-    return Config{ configTimeout = to
-                 , configTokenUnusedTimeout = tuto
-                 , configMaxAttempts = configMaxAttempts
-                 , configAttemptsTimeframe = configAttemptsTimeframe
-                 , configOTPLength = otpl
-                 , configOTPTimeoutSeconds = otpt
-                 , configTFARequired = tfaRequired
-                 , configOtp = configOtp
-                 , configUseTransactionLevels = True
-                 , configEmail = haveEmail
-                 , configAccountCreation = accountCreationConfig
-                 , configSamlConfig = samlConfig
-                 }
+  return
+    Config
+      { configTimeout = to
+      , configTokenUnusedTimeout = tuto
+      , configMaxAttempts = configMaxAttempts
+      , configAttemptsTimeframe = configAttemptsTimeframe
+      , configOTPLength = otpl
+      , configOTPTimeoutSeconds = otpt
+      , configTFARequired = tfaRequired
+      , configOtp = configOtp
+      , configUseTransactionLevels = True
+      , configEmail = haveEmail
+      , configAccountCreation = accountCreationConfig
+      , configSamlConfig = samlConfig
+      }
 
 getSecrets :: (MonadIO m, MonadLogger m) => Conf.Config -> m Secrets
 getSecrets conf = do
   useSignedHeader <-
-    getConfBool "SIGNED_HEADERS" "signed-headers.enable" (Right True)
-                 conf
+    getConfBool
+      "SIGNED_HEADERS"
+      "signed-headers.enable"
+      (Right True)
+      conf
   signedHeaderKey <-
     if useSignedHeader
-    then readSignedHeaderKey "/run/secrets/header_signing_private_key"
-    else do
-      (privateKey, _publicKey) <- liftIO SignedAuth.mkKeys
-      $logInfo "SIGNED_HEADERS is false, generating random key"
-      return privateKey
-
+      then readSignedHeaderKey "/run/secrets/header_signing_private_key"
+      else do
+        (privateKey, _publicKey) <- liftIO SignedAuth.mkKeys
+        $logInfo "SIGNED_HEADERS is false, generating random key"
+        return privateKey
 
   serviceToken <- getConfMaybe "SERVICE_TOKEN" "service-token" conf
-  return Secrets { secretsHeaderPrivateKey = signedHeaderKey
-                 , secretsServiceToken = serviceToken
-                 }
+  return
+    Secrets
+      { secretsHeaderPrivateKey = signedHeaderKey
+      , secretsServiceToken = serviceToken
+      }
 
-tryReadMustacheFile :: MonadIO m => FilePath -> m Mustache.Template
+tryReadMustacheFile :: (MonadIO m) => FilePath -> m Mustache.Template
 tryReadMustacheFile path = liftIO $ do
-  Ex.catches (Mustache.compileMustacheFile path)
+  Ex.catches
+    (Mustache.compileMustacheFile path)
     [ Ex.Handler $ \(e :: IOError) -> do
-      if
-        | isDoesNotExistError e  ->
-            hPutStrLn stderr
-              [i|#{path} does not exist. Please create it before starting.|]
-        | isPermissionError e ->
-            hPutStrLn stderr
-              [i|Permission error reading #{path}. Please check file permissions.|]
-        | otherwise ->
-            hPutStrLn stderr [i|#{path} could not be read. Encountered error: #{e}.|]
-      exitFailure
+        if
+          | isDoesNotExistError e ->
+              hPutStrLn
+                stderr
+                [i|#{path} does not exist. Please create it before starting.|]
+          | isPermissionError e ->
+              hPutStrLn
+                stderr
+                [i|Permission error reading #{path}. Please check file permissions.|]
+          | otherwise ->
+              hPutStrLn stderr [i|#{path} could not be read. Encountered error: #{e}.|]
+        exitFailure
     , Ex.Handler $ \case
         (Mustache.MustacheParserException parseError) -> do
-          hPutStrLn stderr
-           [i|Could not parse template file #{path}: encountered error: #{parseError}|]
+          hPutStrLn
+            stderr
+            [i|Could not parse template file #{path}: encountered error: #{parseError}|]
           exitFailure
         _ -> do
           hPutStrLn stderr [i|Could not parse template file #{path}|]
           exitFailure
     ]
-
 
 setEmailConf :: (MonadIO m, MonadLogger m) => Conf.Config -> m (Maybe EmailConfig)
 setEmailConf conf =
@@ -257,48 +291,51 @@ setEmailConf conf =
       let emailConfigSendmail =
             case sendmailCommand of
               Just cmd
-                | (prg:args) <- Text.splitOn " " cmd
+                | (prg : args) <- Text.splitOn " " cmd
                 , not (Text.null prg) ->
-                  SendmailConfig
-                  { sendmailConfigPath = Text.unpack prg
-                  , sendmailConfigArguments = Text.unpack <$> args
-                  }
+                    SendmailConfig
+                      { sendmailConfigPath = Text.unpack prg
+                      , sendmailConfigArguments = Text.unpack <$> args
+                      }
               _ -> def
-          ecfg = EmailConfig {..}
+          ecfg = EmailConfig{..}
       writeMsmtprc ecfg emailConfigTls emailConfigAuth
       return $ Just ecfg
 
-writeMsmtprc ::
-     (MonadLogger m, MonadIO m) => EmailConfig -> Bool -> Bool -> m ()
+writeMsmtprc
+  :: (MonadLogger m, MonadIO m) => EmailConfig -> Bool -> Bool -> m ()
 writeMsmtprc emailConfig tls auth = do
   txt <- renderMsmtprc emailConfig tls auth
   liftIO $ LText.writeFile "/etc/msmtprc" txt
 
-renderMsmtprc ::
-     (MonadIO m, MonadLogger m)
+renderMsmtprc
+  :: (MonadIO m, MonadLogger m)
   => EmailConfig
   -> Bool
   -> Bool
   -> m LText.Text
 renderMsmtprc cfg tls auth =
   let Mail.Address _ fromAddress = cfg ^. from
-      dt = Aeson.object [ "host" .= (cfg ^. host)
-                        , "port" .= (cfg ^. port)
-                        , "fromAddress" .= fromAddress
-                        , "password" .= cfg ^. password
-                        , "tls" .= tls
-                        , "auth" .= auth
-                        , "user" .= cfg ^. user
-                        ]
-  in case Mustache.renderMustacheW template dt of
-       ([], txt) -> return txt
-       (warnings, _) -> do
-         $logError $ "Could not render msmtprc: " <> Text.pack (show warnings)
-         liftIO Exit.exitFailure
-  where
-    infix 0 .=
-    (.=) = (Aeson..=)
-    template = [mustache|
+      dt =
+        Aeson.object
+          [ "host" .= (cfg ^. host)
+          , "port" .= (cfg ^. port)
+          , "fromAddress" .= fromAddress
+          , "password" .= cfg ^. password
+          , "tls" .= tls
+          , "auth" .= auth
+          , "user" .= cfg ^. user
+          ]
+   in case Mustache.renderMustacheW template dt of
+        ([], txt) -> return txt
+        (warnings, _) -> do
+          $logError $ "Could not render msmtprc: " <> Text.pack (show warnings)
+          liftIO Exit.exitFailure
+ where
+  infix 0 .=
+  (.=) = (Aeson..=)
+  template =
+    [mustache|
 defaults
 
 {{#tls}}

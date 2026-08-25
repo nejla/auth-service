@@ -3,18 +3,18 @@
 
 module SAML.Keys where
 
-import           Crypto.Number.Basic      (numBytes)
-import qualified Crypto.PubKey.RSA.Types  as RSA
-import qualified Data.ASN1.BinaryEncoding as ASN1
-import           Data.ASN1.BitArray       (BitArray(..))
-import qualified Data.ASN1.Encoding       as ASN1
-import           Data.ASN1.Prim
-import           Data.ByteString          (ByteString)
-import qualified Data.ByteString          as BS
-import qualified Data.ByteString.Base64   as Base64
-import qualified Data.ByteString.Char8    as BS8
-import qualified Data.Char                as Char
-import qualified Data.X509                as X509
+import Crypto.Number.Basic (numBytes)
+import Crypto.PubKey.RSA.Types qualified as RSA
+import Data.ASN1.BinaryEncoding qualified as ASN1
+import Data.ASN1.BitArray (BitArray (..))
+import Data.ASN1.Encoding qualified as ASN1
+import Data.ASN1.Prim
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+import Data.ByteString.Base64 qualified as Base64
+import Data.ByteString.Char8 qualified as BS8
+import Data.Char qualified as Char
+import Data.X509 qualified as X509
 
 --------------------------------------------------------------------------------
 -- Helpers ---------------------------------------------------------------------
@@ -27,8 +27,8 @@ readPEM :: ByteString -> ByteString -> Either String ByteString
 readPEM tag bs
   | trimmed <- trim bs
   , Just withoutPrefix <- BS.stripPrefix ("-----BEGIN " <> tag <> "-----") trimmed
-  , Just withoutSuffix <- BS.stripSuffix ("-----END " <> tag <>"-----") withoutPrefix
-     = Right $ BS8.filter (not . Char.isSpace) withoutSuffix
+  , Just withoutSuffix <- BS.stripSuffix ("-----END " <> tag <> "-----") withoutPrefix =
+      Right $ BS8.filter (not . Char.isSpace) withoutSuffix
   | otherwise = Left "Could not read PEM"
 
 readDer :: ByteString -> Either String [ASN1]
@@ -39,10 +39,9 @@ readDer b64 = do
     Right r -> Right r
 
 readAsn1Der der =
-    case ASN1.decodeASN1' ASN1.DER der of
-      Left e -> Left $ "Could not parse ASN.1: " ++ show e
-      Right r -> Right r
-
+  case ASN1.decodeASN1' ASN1.DER der of
+    Left e -> Left $ "Could not parse ASN.1: " ++ show e
+    Right r -> Right r
 
 --------------------------------------------------------------------------------
 -- Private Key -----------------------------------------------------------------
@@ -61,38 +60,39 @@ readAsn1Der der =
 --     coefficient       INTEGER,  -- (inverse of q) mod p
 --     otherPrimeInfos   OtherPrimeInfos OPTIONAL
 -- }
+
 -- | Parse private key binary data from ASN1 abstract type
 parsePrivateKeyAsn1 :: [ASN1] -> Either String RSA.PrivateKey
 parsePrivateKeyAsn1
   [ Start Sequence
-  , IntVal 0 -- version
-  , IntVal n
-  , IntVal e
-  , IntVal d
-  , IntVal p
-  , IntVal q
-  , IntVal dp
-  , IntVal dq
-  , IntVal qinv
-  , End Sequence
-  ] =
-  let privatePub =
-        RSA.PublicKey
-        { public_size = numBytes n
-        , public_n = n
-        , public_e = e
-        }
-  in Right RSA.PrivateKey
-     { private_pub = privatePub
-     , private_d = d
-     , private_p = p
-     , private_q = q
-     , private_dP = dp
-     , private_dQ = dq
-     , private_qinv = qinv
-     }
+    , IntVal 0 -- version
+    , IntVal n
+    , IntVal e
+    , IntVal d
+    , IntVal p
+    , IntVal q
+    , IntVal dp
+    , IntVal dq
+    , IntVal qinv
+    , End Sequence
+    ] =
+    let privatePub =
+          RSA.PublicKey
+            { public_size = numBytes n
+            , public_n = n
+            , public_e = e
+            }
+     in Right
+          RSA.PrivateKey
+            { private_pub = privatePub
+            , private_d = d
+            , private_p = p
+            , private_q = q
+            , private_dP = dp
+            , private_dQ = dq
+            , private_qinv = qinv
+            }
 parsePrivateKeyAsn1 _ = Left "Could not parse ASN.1 key data"
-
 
 -- | Read Base64- DER encoded private key
 parsePrivateKeyPem :: ByteString -> Either String RSA.PrivateKey
@@ -109,13 +109,13 @@ parsePrivateKeyPem pem = do
 parsePublicKeyASN1 :: [ASN1] -> Either String ByteString
 parsePublicKeyASN1
   [ Start Sequence
-  , Start Sequence
-  , OID [1,2,840,113549,1,1,1]
-  , Null
-  , End Sequence
-  , BitString (BitArray _length bs) -- actual content
-  , End Sequence
-  ] = Right bs
+    , Start Sequence
+    , OID [1, 2, 840, 113549, 1, 1, 1]
+    , Null
+    , End Sequence
+    , BitString (BitArray _length bs) -- actual content
+    , End Sequence
+    ] = Right bs
 parsePublicKeyASN1 _ = Left "Could not parse ASN.1"
 
 -- https://datatracker.ietf.org/doc/html/rfc3447#appendix-A.1.1
@@ -126,18 +126,21 @@ parsePublicKeyASN1 _ = Left "Could not parse ASN.1"
 parseRSAPubKeyASN1 :: [ASN1] -> Either String RSA.PublicKey
 parseRSAPubKeyASN1
   [ Start Sequence
-  , IntVal n
-  , IntVal e
-  , End Sequence
-  ] = Right RSA.PublicKey
-  { public_size = numBytes n
-  , public_n = n
-  , public_e = e
-  }
+    , IntVal n
+    , IntVal e
+    , End Sequence
+    ] =
+    Right
+      RSA.PublicKey
+        { public_size = numBytes n
+        , public_n = n
+        , public_e = e
+        }
 parseRSAPubKeyASN1 _ = Left "Could not parse RSA public key"
 
 parseRSAPubkey :: [ASN1] -> Either [Char] RSA.PublicKey
-parseRSAPubkey bs = do -- Either String
+parseRSAPubkey bs = do
+  -- Either String
   keyDer <- parsePublicKeyASN1 bs
   keyAsn1 <- case ASN1.decodeASN1' ASN1.DER keyDer of
     Left e -> Left $ "Could not parse ASN.1: " ++ show e

@@ -1,61 +1,62 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
-
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Types
-  ( module AuthService.Types
-  , module Types
-  ) where
+module Types (
+  module AuthService.Types,
+  module Types,
+) where
 
-import           Control.Lens
-import qualified Control.Monad.Catch     as Ex
-import qualified Crypto.PubKey.RSA.Types as RSA
-import           Data.Default
-import           Data.Map.Strict         (Map)
-import           Data.Text               (Text)
-import           Data.Time               (NominalDiffTime)
-import           Data.Typeable
-import           Network.Mail.Mime       (Address)
-import qualified Text.Microstache        as Mustache
-
-import qualified SignedAuth
-import           AuthService.Types
-import           Control.Monad.Logger    (LoggingT)
+import AuthService.Types
+import Control.Lens
+import Control.Monad.Catch qualified as Ex
+import Control.Monad.Logger (LoggingT)
+import Crypto.PubKey.RSA.Types qualified as RSA
+import Data.Default
+import Data.Map.Strict (Map)
+import Data.Text (Text)
+import Data.Time (NominalDiffTime)
+import Data.Typeable
+import Network.Mail.Mime (Address)
+import SignedAuth qualified
+import Text.Microstache qualified as Mustache
 
 --------------------------------------------------------------------------------
 -- Error
 --------------------------------------------------------------------------------
 
-data EmailError = EmailErrorNotConfigured
-                | EmailRenderError
-                | EmailAddressUnknownError
-                deriving (Show, Eq, Typeable)
+data EmailError
+  = EmailErrorNotConfigured
+  | EmailRenderError
+  | EmailAddressUnknownError
+  deriving (Show, Eq, Typeable)
 
 instance Ex.Exception EmailError
 
-data LoginError = LoginErrorFailed -- Username not found, password wrong or OTP
-                                   -- wrong
-                | LoginErrorOTPRequired
-                | LoginErrorTwilioNotConfigured
-                | LoginErrorRatelimit
-                  deriving (Show, Eq)
+data LoginError
+  = LoginErrorFailed -- Username not found, password wrong or OTP
+  -- wrong
+  | LoginErrorOTPRequired
+  | LoginErrorTwilioNotConfigured
+  | LoginErrorRatelimit
+  deriving (Show, Eq)
 
 makePrisms ''LoginError
 
-data ChangePasswordError = ChangePasswordLoginError LoginError
-                         | ChangePasswordTokenError
-                         | ChangePasswordHashError
-                         | ChangePasswordUserDoesNotExistError
-                           deriving (Show, Eq, Typeable)
+data ChangePasswordError
+  = ChangePasswordLoginError LoginError
+  | ChangePasswordTokenError
+  | ChangePasswordHashError
+  | ChangePasswordUserDoesNotExistError
+  deriving (Show, Eq, Typeable)
 
 instance Ex.Exception ChangePasswordError
 
@@ -67,24 +68,25 @@ makePrisms ''ChangePasswordError
 type PwResetToken = Text
 
 data TwilioConfig = TwilioConfig
-  { twilioConfigAccount      :: Text
-  , twilioConfigAuthToken    :: Text
+  { twilioConfigAccount :: Text
+  , twilioConfigAuthToken :: Text
   , twilioConfigSourceNumber :: Text
-  } deriving (Show)
+  }
+  deriving (Show)
 
-
-data SendmailConfig =
-  SendmailConfig
+data SendmailConfig
+  = SendmailConfig
   { sendmailConfigPath :: String
   , sendmailConfigArguments :: [String]
-  } deriving Show
+  }
+  deriving (Show)
 
 instance Default SendmailConfig where
   def =
     SendmailConfig
-    { sendmailConfigPath = "/usr/sbin/sendmail"
-    , sendmailConfigArguments = ["-t"]
-    }
+      { sendmailConfigPath = "/usr/sbin/sendmail"
+      , sendmailConfigArguments = ["-t"]
+      }
 
 data EmailConfig = EmailConfig
   { emailConfigHost :: Text
@@ -95,24 +97,25 @@ data EmailConfig = EmailConfig
   , emailConfigPWResetTemplate :: Mustache.Template
   , emailConfigPWResetUnknownTemplate :: Mustache.Template
   , emailConfigSendmail :: SendmailConfig
-  , emailConfigResetLinkExpirationTime :: Int -- ^ Time in hours
+  , emailConfigResetLinkExpirationTime :: Int
+  -- ^ Time in hours
   }
 
 type OtpHandler = Phone -> Text -> LoggingT IO ()
 
-data AccountCreationConfig =
-  AccountCreationConfig
+data AccountCreationConfig
+  = AccountCreationConfig
   { accountCreationConfigEnabled :: Bool
   , accountCreationConfigDefaultInstances :: [InstanceID]
   }
 
-data RequestSigningDigest =
-  RequestSigningDigestSHA1
+data RequestSigningDigest
+  = RequestSigningDigestSHA1
   | RequestSigningDigestSHA256
-    deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show)
 
-data SamlInstanceConfig =
-  SamlInstanceConfig
+data SamlInstanceConfig
+  = SamlInstanceConfig
   { samlInstanceConfigEncryptionKey :: RSA.PrivateKey
   , samlInstanceConfigAllowUnencrypted :: Bool
   , samlInstanceConfigSigningKey :: RSA.PublicKey
@@ -123,56 +126,58 @@ data SamlInstanceConfig =
   , samlInstanceConfigAllowUnsolicited :: Bool
   , samlInstanceConfigRequestSigningKey :: Maybe RSA.PrivateKey
   , samlInstanceConfigRequestSigningDigest :: RequestSigningDigest
-  -- Expected attribute for name property (e.g. "name" or "displayname")
-  -- Default: "displayname"
-  , samlInstanceConfigNameAttribute :: Text
-  -- Expected attribute for email property (e.g. "email" or "emailaddress")
-  -- Default: "emailaddress"
-  , samlInstanceConfigEmailAttribute :: Text
-  -- Expected attribute for instance property
-  -- Default: "instance"
-  , samlInstanceConfigInstanceAttribute :: Text
-  -- Expected attribute for role property
-  -- Default: "role"
-  , samlInstanceConfigRoleAttribute :: Text
-  } deriving Show
+  , -- Expected attribute for name property (e.g. "name" or "displayname")
+    -- Default: "displayname"
+    samlInstanceConfigNameAttribute :: Text
+  , -- Expected attribute for email property (e.g. "email" or "emailaddress")
+    -- Default: "emailaddress"
+    samlInstanceConfigEmailAttribute :: Text
+  , -- Expected attribute for instance property
+    -- Default: "instance"
+    samlInstanceConfigInstanceAttribute :: Text
+  , -- Expected attribute for role property
+    -- Default: "role"
+    samlInstanceConfigRoleAttribute :: Text
+  }
+  deriving (Show)
 
-data SamlConfig =
-  SamlConfig
+data SamlConfig
+  = SamlConfig
   { samlConfigInstances :: Map InstanceID SamlInstanceConfig
-  } deriving Show
+  }
+  deriving (Show)
 
 data Config = Config
-  { configTimeout              :: Maybe Integer -- token timeout in seconds
-  , configTokenUnusedTimeout   :: Maybe Integer
-  , configMaxAttempts          :: Integer -- Number of password attempts per
-                                          -- time frame (e.g. 5 in the last minute)
-  , configAttemptsTimeframe    :: NominalDiffTime
-                                  -- Time frame in which login attempts are
-                                  -- counted (e.g. 60 for one minute)
-  , configOTPLength            :: Int
-  , configOTPTimeoutSeconds    :: Integer
-  , configTFARequired          :: Bool
-  , configOtp                  :: Maybe OtpHandler
+  { configTimeout :: Maybe Integer -- token timeout in seconds
+  , configTokenUnusedTimeout :: Maybe Integer
+  , configMaxAttempts :: Integer -- Number of password attempts per
+  -- time frame (e.g. 5 in the last minute)
+  , configAttemptsTimeframe :: NominalDiffTime
+  , -- Time frame in which login attempts are
+    -- counted (e.g. 60 for one minute)
+    configOTPLength :: Int
+  , configOTPTimeoutSeconds :: Integer
+  , configTFARequired :: Bool
+  , configOtp :: Maybe OtpHandler
   , configUseTransactionLevels :: Bool
-  , configEmail                :: Maybe EmailConfig
-
-  , configAccountCreation      :: AccountCreationConfig
-  , configSamlConfig           :: Maybe SamlConfig
+  , configEmail :: Maybe EmailConfig
+  , configAccountCreation :: AccountCreationConfig
+  , configSamlConfig :: Maybe SamlConfig
   }
 
-data Secrets =
-  Secrets
-    { secretsHeaderPrivateKey     :: SignedAuth.PrivateKey
-    , secretsServiceToken         :: Maybe Text
-    }
+data Secrets
+  = Secrets
+  { secretsHeaderPrivateKey :: SignedAuth.PrivateKey
+  , secretsServiceToken :: Maybe Text
+  }
 
 -- | Necessary data to fill in a password reset email
-data EmailData =
-  EmailData
-  { emailDataToken          :: Text
+data EmailData
+  = EmailData
+  { emailDataToken :: Text
   , emailDataExpirationTime :: Text
-  } deriving (Show)
+  }
+  deriving (Show)
 
 makeLensesWith camelCaseFields ''EmailData
 makeLensesWith camelCaseFields ''AccountCreationConfig

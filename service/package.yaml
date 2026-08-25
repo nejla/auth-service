@@ -10,16 +10,17 @@ extra-source-files:
 - src/schema
 
 default-extensions:
-  - TypeSynonymInstances
-  - FlexibleInstances
-  - RankNTypes
-  - FunctionalDependencies
-  - MultiParamTypeClasses
-  - StrictData
-  - GADTs
-  - KindSignatures
   - DataKinds
+  - FlexibleInstances
+  - FunctionalDependencies
+  - GADTs
+  - ImportQualifiedPost
+  - KindSignatures
   - LambdaCase
+  - MultiParamTypeClasses
+  - RankNTypes
+  - StrictData
+  - TypeSynonymInstances
 
 ghc-options:
   - -Wall

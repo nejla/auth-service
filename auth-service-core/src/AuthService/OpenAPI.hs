@@ -2,14 +2,14 @@
 
 module AuthService.OpenAPI where
 
-import qualified AuthService.Api            as API
-import qualified Data.Aeson                 as Aeson
-import qualified Data.ByteString.Lazy       as BSL
-import           Data.Data                  ( Proxy(..) )
+import qualified AuthService.Api as API
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as BSL
+import Data.Data (Proxy (..))
 import qualified Data.HashMap.Strict.InsOrd as InsOrdHMap
-import           Data.OpenApi
-import           Data.String.Interpolate
-import           Servant.OpenApi
+import Data.OpenApi
+import Data.String.Interpolate
+import Servant.OpenApi
 
 api :: OpenApi
 api = toOpenApi (Proxy :: Proxy API.Api)
@@ -38,10 +38,10 @@ withPaths
   :: ([(FilePath, PathItem)] -> [(FilePath, PathItem)]) -> OpenApi -> OpenApi
 withPaths f api =
   api
-  { _openApiPaths =
-      -- Going via list is the only way to keep the ordering.
-      InsOrdHMap.fromList (f $ InsOrdHMap.toList $ _openApiPaths api)
-  }
+    { _openApiPaths =
+        -- Going via list is the only way to keep the ordering.
+        InsOrdHMap.fromList (f $ InsOrdHMap.toList $ _openApiPaths api)
+    }
 
 translateApi :: OpenApi -> OpenApi
 translateApi = withPaths (\paths -> foldr translatePath paths pathMap)
