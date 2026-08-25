@@ -1,91 +1,89 @@
-{-# LANGUAGE UndecidableInstances #-}
-
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- Handling of signed headers in upstream application
 
-module AuthService.SignedHeaders
-  (
-   -- * Verifying headers
-    AuthContext(..)
-  , mkAuthContext
-  , Sign.PublicKey
-  , Sign.readPublicKeyDer
-  , Sign.readPublicKeyPem
-  , Nonce.Frame
-  , Nonce.newFrame
-   -- * Wai Middleware
-  , AuthHeader(..)
-  , resolveAuthHeader
-   -- * Logging
-  , logRequestBasic
-  , RequestLogUser(..)
-  , RequestLog(..)
+module AuthService.SignedHeaders (
+  -- * Verifying headers
+  AuthContext (..),
+  mkAuthContext,
+  Sign.PublicKey,
+  Sign.readPublicKeyDer,
+  Sign.readPublicKeyPem,
+  Nonce.Frame,
+  Nonce.newFrame,
+
+  -- * Wai Middleware
+  AuthHeader (..),
+  resolveAuthHeader,
+
+  -- * Logging
+  logRequestBasic,
+  RequestLogUser (..),
+  RequestLog (..),
+
   -- * Servant
-  , AuthCredentials(..)
-  , Requiredness(..)
-  , MatchRole(..)
-  , HasRole
-  , RoleVisibility(..)
-  , AnyOf
-   -- * Encoding headers
-  , Sign.PrivateKey
-  , Sign.mkKeys
-  , Sign.readPrivateKeyDer
-  , Sign.readPrivateKeyPem
-  , Headers.encodeHeaders
-  , mkAuthHeader
-  ) where
+  AuthCredentials (..),
+  Requiredness (..),
+  MatchRole (..),
+  HasRole,
+  RoleVisibility (..),
+  AnyOf,
 
+  -- * Encoding headers
+  Sign.PrivateKey,
+  Sign.mkKeys,
+  Sign.readPrivateKeyDer,
+  Sign.readPrivateKeyPem,
+  Headers.encodeHeaders,
+  mkAuthHeader,
+) where
 
-import           Control.Lens
-import qualified Control.Monad.Catch             as Ex
-import           Control.Monad.Logger
-import           Control.Monad.Trans
-import qualified Data.Aeson                      as Aeson
-import qualified Data.Aeson.TH                   as Aeson
-import           Data.IORef
-import qualified Data.List                       as List
-import           Data.List.NonEmpty              (NonEmpty(..))
-import           Data.Text                       (Text)
-import qualified Data.Text                       as Text
-import qualified Data.Text.Encoding              as Text
-import qualified Data.Text.Encoding.Error        as Text
-import           Data.Time.Clock
-import           GHC.TypeLits                    (symbolVal, Symbol, KnownSymbol)
-import qualified Network.HTTP.Types              as HTTP
-import           Network.Wai                     (requestHeaders, Request)
-import qualified Network.Wai                     as Wai
-import           Servant                         hiding (Required, Optional)
-import           Servant.Server.Internal         (delayedFailFatal, addAuthCheck)
-
-import qualified SignedAuth.Headers              as Headers
-import qualified SignedAuth.Nonce                as Nonce
-import qualified SignedAuth.Sign                 as Sign
-
-import           AuthService.Types
-import qualified Data.OpenApi.ParamSchema        as OpenApi
-import qualified Servant.OpenApi                 as OpenApi
-
-import           Helpers
-import           Servant.Server.Internal.Delayed (Delayed(..))
+import AuthService.Types
+import Control.Lens
+import qualified Control.Monad.Catch as Ex
+import Control.Monad.Logger
+import Control.Monad.Trans
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.TH as Aeson
+import Data.IORef
+import qualified Data.List as List
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.OpenApi.ParamSchema as OpenApi
+import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Encoding.Error as Text
+import Data.Time.Clock
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import Helpers
+import qualified Network.HTTP.Types as HTTP
+import Network.Wai (Request, requestHeaders)
+import qualified Network.Wai as Wai
+import Servant hiding (Optional, Required)
+import qualified Servant.OpenApi as OpenApi
+import Servant.Server.Internal (addAuthCheck, delayedFailFatal)
+import Servant.Server.Internal.Delayed (Delayed (..))
+import qualified SignedAuth.Headers as Headers
+import qualified SignedAuth.Nonce as Nonce
+import qualified SignedAuth.Sign as Sign
 
 -- | The context needed to create
-data AuthContext =
-  AuthContext
-  { authContextPubKey ::  Sign.PublicKey
+data AuthContext
+  = AuthContext
+  { authContextPubKey :: Sign.PublicKey
   , authContextNonceFrame :: Nonce.Frame
   , authContextLogger :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
   }
@@ -94,7 +92,7 @@ makeLensesWith camelCaseFields ''AuthContext
 
 -- | Create a new nonce frame, get the ambient logging function and create an
 -- auth context
-mkAuthContext :: MonadLoggerIO m => Sign.PublicKey -> m AuthContext
+mkAuthContext :: (MonadLoggerIO m) => Sign.PublicKey -> m AuthContext
 mkAuthContext pubKey = do
   frame <- liftIO Nonce.newFrame
   AuthContext pubKey frame <$> askLoggerIO
@@ -103,22 +101,32 @@ mkAuthContext pubKey = do
 -- Request handling ------------------------------------------------------------
 --------------------------------------------------------------------------------
 -- Factored out because both resolveAuthHeader and runAuthMaybe need it
-handleRequest :: (MonadIO m, Aeson.FromJSON b) =>
-                 AuthContext -> Request -> m (Maybe (Either String b))
+handleRequest
+  :: (MonadIO m, Aeson.FromJSON b)
+  => AuthContext
+  -> Request
+  -> m (Maybe (Either String b))
 handleRequest ctx req =
-    case List.lookup "X-Auth" (requestHeaders req) of
-      Nothing -> return Nothing
-      Just authH -> do
-        res <- liftIO (Headers.decodeHeaders (ctx ^. pubKey) (ctx ^. nonceFrame)
-                 (Headers.JWS authH))
-        case res of
-          Left e -> do
-            liftIO $ logWarn e
-            return (Just $ Left e)
-          Right r -> return $ Just (Right r)
-  where
-    logWarn e = authContextLogger ctx defaultLoc "auth-service" LevelWarn
-                   . toLogStr $ "Error handling authorization header: "  ++ e
+  case List.lookup "X-Auth" (requestHeaders req) of
+    Nothing -> return Nothing
+    Just authH -> do
+      res <-
+        liftIO
+          ( Headers.decodeHeaders
+              (ctx ^. pubKey)
+              (ctx ^. nonceFrame)
+              (Headers.JWS authH)
+          )
+      case res of
+        Left e -> do
+          liftIO $ logWarn e
+          return (Just $ Left e)
+        Right r -> return $ Just (Right r)
+ where
+  logWarn e =
+    authContextLogger ctx defaultLoc "auth-service" LevelWarn
+      . toLogStr
+      $ "Error handling authorization header: " ++ e
 
 --------------------------------------------------------------------------------
 -- Middleware ------------------------------------------------------------------
@@ -128,8 +136,8 @@ handleRequest ctx req =
 --
 -- Use like a 'Middleware' just with the "downstream" application taking another
 -- argument
-resolveAuthHeader ::
-      AuthContext
+resolveAuthHeader
+  :: AuthContext
   -> (Maybe AuthHeader -> Application)
   -> Application
 resolveAuthHeader ctx downstream req respond = do
@@ -137,27 +145,31 @@ resolveAuthHeader ctx downstream req respond = do
     Nothing -> next Nothing
     Just (Left _e) -> err403
     Just (Right r) -> next $ Just r
-  where
-    next hdr =
-      downstream hdr req respond
-    err403 = respond $ Wai.responseLBS HTTP.status403 [] "Authentication denied"
+ where
+  next hdr =
+    downstream hdr req respond
+  err403 = respond $ Wai.responseLBS HTTP.status403 [] "Authentication denied"
 
 -- Logging middleware
 ---------------------
 
-data RequestLogUser =
-  RequestLogUser
+data RequestLogUser
+  = RequestLogUser
   { requestLogUserName :: Text
   , requestLogUserEmail :: Text
   , requestLogUserId :: Text
   , requestLogUserRoles :: [Text]
-  } deriving (Show)
+  }
+  deriving (Show)
 
-Aeson.deriveJSON Aeson.defaultOptions
-  {Aeson.fieldLabelModifier = dropPrefix "requestLogUser"} ''RequestLogUser
+Aeson.deriveJSON
+  Aeson.defaultOptions
+    { Aeson.fieldLabelModifier = dropPrefix "requestLogUser"
+    }
+  ''RequestLogUser
 
-data RequestLog =
-  RequestLog
+data RequestLog
+  = RequestLog
   { requestLogTime :: UTCTime
   , requestLogMethod :: Text
   , requestLogPath :: Text
@@ -166,8 +178,11 @@ data RequestLog =
   , requestLogResponseTimeMs :: Integer
   }
 
-Aeson.deriveJSON Aeson.defaultOptions
-  {Aeson.fieldLabelModifier = dropPrefix "requestLog"} ''RequestLog
+Aeson.deriveJSON
+  Aeson.defaultOptions
+    { Aeson.fieldLabelModifier = dropPrefix "requestLog"
+    }
+  ''RequestLog
 
 -- | Log basic facts about an HTTP requests including resolved authentication
 -- details as json
@@ -185,35 +200,44 @@ Aeson.deriveJSON Aeson.defaultOptions
 --   [@name@]: Name of the user
 --   [@email@]: Email address
 --   [@id@]: Unique user ID of the user
-logRequestBasic ::
-     AuthContext
+logRequestBasic
+  :: AuthContext
   -> Maybe AuthHeader
   -> Wai.Middleware
-logRequestBasic ctx mbAuthHeader next  req respond = do
+logRequestBasic ctx mbAuthHeader next req respond = do
   begin <- getCurrentTime
   rStatus <- newIORef Nothing
-  handled <- Ex.try
-             $ next req (\res -> writeIORef rStatus (Just $ Wai.responseStatus res)
-                                 >> respond res)
+  handled <-
+    Ex.try $
+      next
+        req
+        ( \res ->
+            writeIORef rStatus (Just $ Wai.responseStatus res)
+              >> respond res
+        )
   end <- getCurrentTime
-  let runTime = round $ (end `diffUTCTime` begin)  * 1000
+  let runTime = round $ (end `diffUTCTime` begin) * 1000
       -- NominalDiffTime is treated like seconds by conversion functions
-      user = mbAuthHeader <&> \hdr ->
-        RequestLogUser
-        { requestLogUserName = hdr ^. name . _Name
-        , requestLogUserEmail = hdr ^. email . _Email
-        , requestLogUserId = hdr ^. userID
-        , requestLogUserRoles = hdr ^. roles
-        }
+      user =
+        mbAuthHeader <&> \hdr ->
+          RequestLogUser
+            { requestLogUserName = hdr ^. name . _Name
+            , requestLogUserEmail = hdr ^. email . _Email
+            , requestLogUserId = hdr ^. userID
+            , requestLogUserRoles = hdr ^. roles
+            }
   case handled of
     Left (e :: Ex.SomeException) -> do
       -- unhandled exception, ignore any set reqponse status
-      log RequestLog
+      log
+        RequestLog
           { requestLogTime = begin
-          , requestLogMethod = Text.decodeUtf8With Text.lenientDecode
-                                 $ Wai.requestMethod req
-          , requestLogPath = Text.decodeUtf8With Text.lenientDecode
-                               $ Wai.rawPathInfo req
+          , requestLogMethod =
+              Text.decodeUtf8With Text.lenientDecode $
+                Wai.requestMethod req
+          , requestLogPath =
+              Text.decodeUtf8With Text.lenientDecode $
+                Wai.rawPathInfo req
           , requestLogUser = user
           , requestLogResponseStatus = 500
           , requestLogResponseTimeMs = runTime
@@ -224,25 +248,32 @@ logRequestBasic ctx mbAuthHeader next  req respond = do
       statuscode <- case mbStatus of
         Nothing -> do
           -- This should not happen
-          logLine "auth-service-core" LevelError
-                  "Subhandler did not return response status"
+          logLine
+            "auth-service-core"
+            LevelError
+            "Subhandler did not return response status"
           return 0
         Just s -> return $ HTTP.statusCode s
-      log RequestLog
+      log
+        RequestLog
           { requestLogTime = begin
-          , requestLogMethod = Text.decodeUtf8With Text.lenientDecode
-                                 $ Wai.requestMethod req
-          , requestLogPath = Text.decodeUtf8With Text.lenientDecode
-                               $ Wai.rawPathInfo req
+          , requestLogMethod =
+              Text.decodeUtf8With Text.lenientDecode $
+                Wai.requestMethod req
+          , requestLogPath =
+              Text.decodeUtf8With Text.lenientDecode $
+                Wai.rawPathInfo req
           , requestLogUser = user
           , requestLogResponseStatus = statuscode
           , requestLogResponseTimeMs = runTime
           }
       return responseReceived
-  where
-    logLine = authContextLogger ctx defaultLoc
-    log = authContextLogger ctx defaultLoc "simple-request-json" LevelInfo
-            . toLogStr . Aeson.encode
+ where
+  logLine = authContextLogger ctx defaultLoc
+  log =
+    authContextLogger ctx defaultLoc "simple-request-json" LevelInfo
+      . toLogStr
+      . Aeson.encode
 
 --------------------------------------------------------------------------------
 -- Servant ---------------------------------------------------------------------
@@ -268,54 +299,58 @@ makePrisms ''AuthCredentials
 instance OpenApi.ToParamSchema (AuthCredentials required a) where
   toParamSchema _ = OpenApi.toParamSchema (Proxy :: Proxy String)
 
-instance OpenApi.HasOpenApi rest => OpenApi.HasOpenApi (AuthCredentials required a :> rest) where
+instance (OpenApi.HasOpenApi rest) => OpenApi.HasOpenApi (AuthCredentials required a :> rest) where
   toOpenApi _ = OpenApi.toOpenApi (Proxy :: Proxy (Header "X-Auth" String :> rest))
 
 type instance IsElem' e (AuthCredentials required a :> s) = IsElem e s
 
-instance ( HasServer api context
-         , HasContextEntry context (Maybe AuthHeader)
-         )
-    => HasServer (AuthCredentials 'Required AuthHeader :> api) context where
-
-  type ServerT (AuthCredentials 'Required AuthHeader :> api) m
-    = AuthHeader -> ServerT api m
+instance
+  ( HasServer api context
+  , HasContextEntry context (Maybe AuthHeader)
+  )
+  => HasServer (AuthCredentials 'Required AuthHeader :> api) context
+  where
+  type
+    ServerT (AuthCredentials 'Required AuthHeader :> api) m =
+      AuthHeader -> ServerT api m
 
   route Proxy context subserver =
     route (Proxy :: Proxy api) context (subserver `addAuthCheck` authCheck)
-    where
-       mbAuthHeader = getContextEntry context :: (Maybe AuthHeader)
-       authCheck = case mbAuthHeader of
-                     Nothing -> delayedFailFatal err401
-                     Just authHeader -> return authHeader
+   where
+    mbAuthHeader = getContextEntry context :: (Maybe AuthHeader)
+    authCheck = case mbAuthHeader of
+      Nothing -> delayedFailFatal err401
+      Just authHeader -> return authHeader
 
   hoistServerWithContext _ pc nt s = hoistServerWithContext (Proxy :: Proxy api) pc nt . s
 
 -- | Basic Authentication
-instance ( HasServer api context
-         , HasContextEntry context (Maybe AuthHeader)
-         )
-    => HasServer (AuthCredentials 'Optional AuthHeader :> api) context where
-
-  type ServerT (AuthCredentials 'Optional AuthHeader :> api) m
-    = Maybe AuthHeader -> ServerT api m
+instance
+  ( HasServer api context
+  , HasContextEntry context (Maybe AuthHeader)
+  )
+  => HasServer (AuthCredentials 'Optional AuthHeader :> api) context
+  where
+  type
+    ServerT (AuthCredentials 'Optional AuthHeader :> api) m =
+      Maybe AuthHeader -> ServerT api m
 
   route Proxy context subserver =
     route (Proxy :: Proxy api) context (subserver `addAuthCheck` authCheck)
-    where
-       authHeader = getContextEntry context :: Maybe AuthHeader
-       authCheck = return authHeader
+   where
+    authHeader = getContextEntry context :: Maybe AuthHeader
+    authCheck = return authHeader
 
   hoistServerWithContext _ pc nt s = hoistServerWithContext (Proxy :: Proxy api) pc nt . s
 
 -- | Create an auth header (for debugging / testing)
-mkAuthHeader ::
-     Nonce.NoncePool
+mkAuthHeader
+  :: Nonce.NoncePool
   -> Sign.PrivateKey
   -> AuthHeader
   -> IO HTTP.Header
 mkAuthHeader noncePool privKey authHeader = do
-  Headers.JWS jws <-  Headers.encodeHeaders privKey noncePool authHeader
+  Headers.JWS jws <- Headers.encodeHeaders privKey noncePool authHeader
   return ("X-Auth", jws)
 
 --------------------------------------------------------------------------------
@@ -325,15 +360,16 @@ mkAuthHeader noncePool privKey authHeader = do
 class MatchRole (t :: k) where
   -- | How to represent roles (e.g. a Text token or a ADT value)
   type RoleRepr t
+
   -- | How to check if the user has an approriate role. Return the matching role
   -- if present
   matchRole :: Proxy t -> [Text] -> [RoleRepr t]
 
-instance KnownSymbol s => MatchRole (s :: Symbol) where
+instance (KnownSymbol s) => MatchRole (s :: Symbol) where
   type RoleRepr s = Text
   matchRole proxy roles =
     let wantedHeader = Text.pack $ symbolVal proxy
-    in [wantedHeader | wantedHeader `elem` roles]
+     in [wantedHeader | wantedHeader `elem` roles]
 
 -- | Whether to pass on the role data to the handler
 data RoleVisibility = RoleVisible | RoleInvisible
@@ -367,55 +403,61 @@ data RoleVisibility = RoleVisible | RoleInvisible
 -- > type MyAPI = "users" :> HasRole 'RoleAdmin 'Optional :> Get '[JSON] User
 data HasRole (a :: k) (vis :: RoleVisibility)
 
-instance ( HasServer api context
-         , MatchRole r
-         , HasContextEntry context (Maybe AuthHeader)
-         )
-    => HasServer (HasRole r 'RoleVisible :> api) context where
-  type ServerT (HasRole r 'RoleVisible :> api) m
-    = NonEmpty (RoleRepr r) -> ServerT api m
+instance
+  ( HasServer api context
+  , MatchRole r
+  , HasContextEntry context (Maybe AuthHeader)
+  )
+  => HasServer (HasRole r 'RoleVisible :> api) context
+  where
+  type
+    ServerT (HasRole r 'RoleVisible :> api) m =
+      NonEmpty (RoleRepr r) -> ServerT api m
 
   route Proxy context subserver =
     route (Proxy :: Proxy api) context (subserver `addAuthCheck` authCheck)
-    where
-       mbAuthHeader = getContextEntry context :: Maybe AuthHeader
-       authCheck =
-         case mbAuthHeader of
-           Nothing -> delayedFailFatal err401
-           Just authHeader ->
-             case matchRole (Proxy :: Proxy r) (authHeader ^. roles) of
-               [] -> delayedFailFatal err403
-               (role:roles) -> return (role :| roles)
+   where
+    mbAuthHeader = getContextEntry context :: Maybe AuthHeader
+    authCheck =
+      case mbAuthHeader of
+        Nothing -> delayedFailFatal err401
+        Just authHeader ->
+          case matchRole (Proxy :: Proxy r) (authHeader ^. roles) of
+            [] -> delayedFailFatal err403
+            (role : roles) -> return (role :| roles)
 
   hoistServerWithContext _ pc nt s =
-    hoistServerWithContext (Proxy :: Proxy api) pc  nt . s
+    hoistServerWithContext (Proxy :: Proxy api) pc nt . s
 
-instance ( HasServer api context
-         , MatchRole r
-         , HasContextEntry context (Maybe AuthHeader)
-         )
-    => HasServer (HasRole r 'RoleInvisible :> api) context where
-  type ServerT (HasRole r 'RoleInvisible :> api) m
-    = ServerT api m
+instance
+  ( HasServer api context
+  , MatchRole r
+  , HasContextEntry context (Maybe AuthHeader)
+  )
+  => HasServer (HasRole r 'RoleInvisible :> api) context
+  where
+  type
+    ServerT (HasRole r 'RoleInvisible :> api) m =
+      ServerT api m
 
   route Proxy context subserver =
     route (Proxy :: Proxy api) context (subserver `addAuthCheck_` authCheck)
-    where
-       mbAuthHeader = getContextEntry context :: Maybe AuthHeader
-       authCheck =
-         case mbAuthHeader of
-           Nothing -> delayedFailFatal err401
-           Just authHeader ->
-             case matchRole (Proxy :: Proxy r) (authHeader ^. roles) of
-               [] -> delayedFailFatal err403
-               (_:_) -> return ()
+   where
+    mbAuthHeader = getContextEntry context :: Maybe AuthHeader
+    authCheck =
+      case mbAuthHeader of
+        Nothing -> delayedFailFatal err401
+        Just authHeader ->
+          case matchRole (Proxy :: Proxy r) (authHeader ^. roles) of
+            [] -> delayedFailFatal err403
+            (_ : _) -> return ()
 
-       -- Adds auth check that doesn't return anything
-       addAuthCheck_ Delayed{..} new =
-         Delayed
-         { authD   = authD <* new
-         , ..
-         }
+    -- Adds auth check that doesn't return anything
+    addAuthCheck_ Delayed{..} new =
+      Delayed
+        { authD = authD <* new
+        , ..
+        }
 
   hoistServerWithContext _ pc nt s =
     hoistServerWithContext (Proxy :: Proxy api) pc nt s
@@ -423,7 +465,7 @@ instance ( HasServer api context
 instance OpenApi.ToParamSchema (HasRole r required) where
   toParamSchema _ = OpenApi.toParamSchema (Proxy :: Proxy String)
 
-instance OpenApi.HasOpenApi rest => OpenApi.HasOpenApi (HasRole r required :> rest) where
+instance (OpenApi.HasOpenApi rest) => OpenApi.HasOpenApi (HasRole r required :> rest) where
   toOpenApi _ = OpenApi.toOpenApi (Proxy :: Proxy (Header "X-Auth" String :> rest))
 
 type instance IsElem' e (HasRole r required :> s) = IsElem e s
@@ -434,17 +476,19 @@ type instance IsElem' e (HasRole r required :> s) = IsElem e s
 -- in the above example "admin" comes before "mederator"
 data AnyOf (a :: k)
 
-instance MatchRole r => MatchRole (AnyOf '[ r ]) where
-  type RoleRepr (AnyOf '[ r ]) = RoleRepr r
+instance (MatchRole r) => MatchRole (AnyOf '[r]) where
+  type RoleRepr (AnyOf '[r]) = RoleRepr r
   matchRole _ = matchRole (Proxy @r)
 
-instance {-# OVERLAPPABLE #-}
-         ( MatchRole r
-         , MatchRole (AnyOf rs)
-         , RoleRepr r ~ RoleRepr (AnyOf rs)
-         ) =>
-         MatchRole (AnyOf (r ': rs)) where
+instance
+  {-# OVERLAPPABLE #-}
+  ( MatchRole r
+  , MatchRole (AnyOf rs)
+  , RoleRepr r ~ RoleRepr (AnyOf rs)
+  )
+  => MatchRole (AnyOf (r ': rs))
+  where
   type RoleRepr (AnyOf (r ': rs)) = RoleRepr r
   matchRole _prx role =
     matchRole (Proxy :: Proxy r) role
-        ++ matchRole (Proxy :: Proxy (AnyOf rs)) role
+      ++ matchRole (Proxy :: Proxy (AnyOf rs)) role

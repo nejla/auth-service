@@ -11,28 +11,29 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-module Persist.Schema
-  ( module Persist.Schema
-  , uuid
-  ) where
+module Persist.Schema (
+  module Persist.Schema,
+  uuid,
+) where
 
 import Control.Lens
 import Data.Text (Text)
 import Data.Time.Clock
 import Database.Persist.Quasi
 import Database.Persist.TH
-
-import Types
-import Persist.Stage ()
-
 import NejlaCommon
+import Persist.Stage ()
+import Types
 
-share [ mkPersist sqlSettings
-      , mkMigrate "migrateAll", mkForeignInstances]
-    $(persistFileWith lowerCaseSettings "src/schema")
+share
+  [ mkPersist sqlSettings
+  , mkMigrate "migrateAll"
+  , mkForeignInstances
+  ]
+  $(persistFileWith lowerCaseSettings "src/schema")
 
 makeLensesWith camelCaseFields ''User
 makeLensesWith camelCaseFields ''Instance

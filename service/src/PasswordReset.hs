@@ -1,51 +1,51 @@
-{-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module PasswordReset where
 
-import qualified Control.Exception    as Ex (ErrorCall(..))
-import           Control.Lens         hiding (from)
-import qualified Control.Monad.Catch  as Ex
-import qualified Control.Monad.Logger as Log
-import           Control.Monad.Trans
-import qualified Data.Aeson           as Aeson
-import           Data.Maybe           (fromMaybe)
-import           Data.Monoid
-import           Data.Text            (Text)
-import qualified Data.Text            as Text
-import qualified Data.Text.Lazy       as LText
-import           Data.Time.Clock
-import qualified Data.Traversable     as Traversable
-import           NejlaCommon          (viewState)
-import qualified Network.Mail.Mime    as Mail
-import           Prelude              hiding (id)
-import qualified Text.Microstache     as Mustache
-
-import           Backend
-import           Logging
-import           Monad
-import           Types
+import Backend
+import Control.Exception qualified as Ex (ErrorCall (..))
+import Control.Lens hiding (from)
+import Control.Monad.Catch qualified as Ex
+import Control.Monad.Logger qualified as Log
+import Control.Monad.Trans
+import Data.Aeson qualified as Aeson
+import Data.Maybe (fromMaybe)
+import Data.Monoid
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.Lazy qualified as LText
+import Data.Time.Clock
+import Data.Traversable qualified as Traversable
+import Logging
+import Monad
+import NejlaCommon (viewState)
+import Network.Mail.Mime qualified as Mail
+import Text.Microstache qualified as Mustache
+import Types
+import Prelude hiding (id)
 
 -- | Create an Aeson object from password reset email data
 fromEmailData :: EmailData -> Aeson.Value
 fromEmailData emailData =
-  Aeson.object [ "token" .= (emailData ^. Types.token)
-               , "expirationTime" .= emailData ^. expirationTime
-               ]
-  where
-    infix 0 .=
-    (.=) = (Aeson..=)
+  Aeson.object
+    [ "token" .= (emailData ^. Types.token)
+    , "expirationTime" .= emailData ^. expirationTime
+    ]
+ where
+  infix 0 .=
+  (.=) = (Aeson..=)
 
-renderEmail ::
-     (Log.MonadLogger m, Ex.MonadThrow m)
+renderEmail
+  :: (Log.MonadLogger m, Ex.MonadThrow m)
   => EmailConfig
   -> Mustache.Template
   -> Maybe PwResetToken
@@ -53,20 +53,20 @@ renderEmail ::
 renderEmail cfg tmpl mbToken =
   let emailData =
         EmailData
-        { emailDataExpirationTime =  Text.pack $ show $ cfg ^.resetLinkExpirationTime
-        , emailDataToken = fromMaybe "" mbToken
-        }
+          { emailDataExpirationTime = Text.pack $ show $ cfg ^. resetLinkExpirationTime
+          , emailDataToken = fromMaybe "" mbToken
+          }
       (warnings, result) = Mustache.renderMustacheW tmpl $ fromEmailData emailData
-  in case warnings of
-       [] -> return result
-       (_:_) -> do
-         logError $
-           "Could not render email, Microstache warnings: " <>
-           Text.pack (show warnings)
-         Ex.throwM  EmailRenderError
+   in case warnings of
+        [] -> return result
+        (_ : _) -> do
+          logError $
+            "Could not render email, Microstache warnings: "
+              <> Text.pack (show warnings)
+          Ex.throwM EmailRenderError
 
-sendEmail ::
-     EmailConfig
+sendEmail
+  :: EmailConfig
   -> Mustache.Template
   -> Email
   -> Text
@@ -79,14 +79,16 @@ sendEmail cfg tmpl (Email toAddress) subject token = do
       to = Mail.Address Nothing toAddress
   let mail =
         Mail.addPart [Mail.plainPart plainBody, Mail.htmlPart body] $
-        (Mail.emptyMail (cfg ^. from))
-          {Mail.mailHeaders = [("Subject", subject)], Mail.mailTo = [to]}
+          (Mail.emptyMail (cfg ^. from))
+            { Mail.mailHeaders = [("Subject", subject)]
+            , Mail.mailTo = [to]
+            }
   mbError <-
     liftIO . Ex.try $
-    Mail.renderSendMailCustom
-      (sendmailCfg ^. path)
-      (sendmailCfg ^. arguments)
-      mail
+      Mail.renderSendMailCustom
+        (sendmailCfg ^. path)
+        (sendmailCfg ^. arguments)
+        mail
   case mbError of
     Left (Ex.ErrorCall msg) -> do
       logError $ "Error sending password reset mail: " <> Text.pack msg
@@ -116,6 +118,6 @@ passwordResetRequest userMail =
       case mbToken of
         Nothing -> sendPasswordResetUnknownEmail cfg userMail
         Just tok -> sendPasswordResetEmail cfg userMail tok
-  where
-    hours :: Int -> NominalDiffTime
-    hours hs = fromIntegral $ hs * 6 * 60
+ where
+  hours :: Int -> NominalDiffTime
+  hours hs = fromIntegral $ hs * 6 * 60

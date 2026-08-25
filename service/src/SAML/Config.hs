@@ -1,61 +1,61 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 module SAML.Config where
 
-import qualified Control.Monad.Catch              as Ex
-import           Control.Monad.Logger             (logError, logInfo, MonadLogger)
-import           Control.Monad.Trans
-import qualified Data.ByteString                  as BS
-import qualified Data.Configurator.Types          as Config
-import           Data.Map.Strict                  (Map)
-import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (catMaybes, fromMaybe)
-import           Data.String.Interpolate.IsString (i)
-import           Data.Text                        (Text)
-import qualified Data.Text                        as Text
-import qualified Data.Text.IO                     as Text
-import qualified Data.Traversable                 as Traversable
-import qualified Data.UUID                        as UUID
-import qualified System.Directory                 as Dir
-import           System.Exit                      (exitFailure)
-import           System.FilePath                  ((</>))
-import           System.IO.Error                  (isDoesNotExistError)
-
-import           NejlaCommon.Config               hiding (Config)
-
-import           SAML.Keys
-
-import           Types
-
+import Control.Monad.Catch qualified as Ex
+import Control.Monad.Logger (MonadLogger, logError, logInfo)
+import Control.Monad.Trans
+import Data.ByteString qualified as BS
+import Data.Configurator.Types qualified as Config
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes, fromMaybe)
+import Data.String.Interpolate.IsString (i)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
+import Data.Traversable qualified as Traversable
+import Data.UUID qualified as UUID
+import NejlaCommon.Config hiding (Config)
+import SAML.Keys
+import System.Directory qualified as Dir
+import System.Exit (exitFailure)
+import System.FilePath ((</>))
+import System.IO.Error (isDoesNotExistError)
+import Types
 
 readConfigLines :: Text -> Map Text Text
 readConfigLines txt =
   Map.fromList
     [ (Text.strip k, Text.strip v)
     | line <- Text.lines txt -- Ignore lines that only contain white spaces
-    , (k,v) <- splitEq line
+    , (k, v) <- splitEq line
     ]
-  where
-    splitEq :: Text -> [(Text, Text)]
-    -- Split on the first equals sign, removing it. Additional equals signs are
-    -- considered part of the value
-    splitEq line = let (k, suff) = Text.breakOn "=" line
-                  in case Text.stripPrefix "=" suff of
-                       Nothing -> []
-                       Just v -> [(k, v)]
+ where
+  splitEq :: Text -> [(Text, Text)]
+  -- Split on the first equals sign, removing it. Additional equals signs are
+  -- considered part of the value
+  splitEq line =
+    let (k, suff) = Text.breakOn "=" line
+     in case Text.stripPrefix "=" suff of
+          Nothing -> []
+          Just v -> [(k, v)]
 
-readConfigFile :: MonadIO m => FilePath -> m (Map Text Text)
+readConfigFile :: (MonadIO m) => FilePath -> m (Map Text Text)
 readConfigFile pth = liftIO $ do
   txt <- Text.readFile pth
   return $ readConfigLines txt
 
-getSamlConfig :: (MonadIO m, MonadLogger m) =>
-  FilePath -> FilePath -> m SamlInstanceConfig
+getSamlConfig
+  :: (MonadIO m, MonadLogger m)
+  => FilePath
+  -> FilePath
+  -> m SamlInstanceConfig
 getSamlConfig base inst = do
   let path = base </> inst
 
@@ -64,12 +64,13 @@ getSamlConfig base inst = do
   conf <- readConfigFile conffilePath
   samlInstanceConfigAudience <- get "audience" conf
   let samlInstanceConfigRedirectAfterLogin = fromMaybe "/" $ Map.lookup "redirect_after_login" conf
-  samlInstanceConfigThisInstance <- get "instance" conf >>= \instTxt ->
-    case UUID.fromText instTxt of
-      Nothing -> do
-        $logError [i|SAML: Could not read instance ID #{instTxt} for folder #{inst} as an UUID|]
-        liftIO exitFailure
-      Just iid -> return $ InstanceID iid
+  samlInstanceConfigThisInstance <-
+    get "instance" conf >>= \instTxt ->
+      case UUID.fromText instTxt of
+        Nothing -> do
+          $logError [i|SAML: Could not read instance ID #{instTxt} for folder #{inst} as an UUID|]
+          liftIO exitFailure
+        Just iid -> return $ InstanceID iid
   samlInstanceConfigIdPBaseUrl <- get "idp_request_url" conf
 
   samlInstanceConfigAllowUnencrypted <- getBool "allow_unencrypted_assertions" conf
@@ -96,75 +97,86 @@ getSamlConfig base inst = do
   let requestSigningKey = path </> "request-signing.key.pem"
   mbRequestSigningKeyBS <- liftIO $ Ex.try (BS.readFile requestSigningKey)
   samlInstanceConfigRequestSigningKey <- case mbRequestSigningKeyBS of
-    Right requestSigningKeyBS  ->
+    Right requestSigningKeyBS ->
       case parsePrivateKeyPem requestSigningKeyBS of
         Left e -> do
           $logError [i|Could not parse SAML request signing key from #{requestSigningKey}:  #{show e}|]
           liftIO exitFailure
         Right key -> return $ Just key
     Left e | isDoesNotExistError e -> do
-               $logInfo [i|No request signing key found for #{inst}, disabling request signing|]
-               return Nothing
+      $logInfo [i|No request signing key found for #{inst}, disabling request signing|]
+      return Nothing
     Left e -> do
-          $logError [i|Could not read SAML request signing key from #{requestSigningKey}:  #{show e}|]
-          liftIO exitFailure
+      $logError [i|Could not read SAML request signing key from #{requestSigningKey}:  #{show e}|]
+      liftIO exitFailure
 
   $logInfo [i|Got SAML configuration for instance #{samlInstanceConfigThisInstance}|]
 
-  samlInstanceConfigRequestSigningDigest
-     <- case Map.lookup "request_signing_digest" conf of
-          Nothing -> return RequestSigningDigestSHA256
-          Just "sha1" -> return RequestSigningDigestSHA1
-          Just "sha256" -> return RequestSigningDigestSHA256
-          Just d -> do
-            $logError [i|Unknown request signing digest: #{d}|]
-            liftIO exitFailure
+  samlInstanceConfigRequestSigningDigest <-
+    case Map.lookup "request_signing_digest" conf of
+      Nothing -> return RequestSigningDigestSHA256
+      Just "sha1" -> return RequestSigningDigestSHA1
+      Just "sha256" -> return RequestSigningDigestSHA256
+      Just d -> do
+        $logError [i|Unknown request signing digest: #{d}|]
+        liftIO exitFailure
 
-  let samlInstanceConfigNameAttribute = getDefault "name_attribute" conf "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname"
+  let samlInstanceConfigNameAttribute =
+        getDefault "name_attribute" conf "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname"
       samlInstanceConfigEmailAttribute = getDefault "email_attribute" conf "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/email"
       samlInstanceConfigInstanceAttribute = getDefault "instance_attribute" conf "instance"
       samlInstanceConfigRoleAttribute = getDefault "role_attribute" conf "role"
   return SamlInstanceConfig{..}
+ where
+  getDefault k m def = case Map.lookup k m of
+    Just v -> v
+    Nothing -> def
+  get k m = case Map.lookup k m of
+    Just v -> return v
+    Nothing -> do
+      $logError [i|SAML: missing configuration entry #{k} for folder ${inst}|]
+      liftIO exitFailure
+  getBool k m =
+    case Map.lookup k m of
+      Nothing -> return False
+      Just txt ->
+        let v = Text.toLower txt
+         in if
+              | v == "true" -> return True
+              | v == "false" -> return False
+              | otherwise -> do
+                  $logError
+                    [i|SAML: Could not parse configuration value for key #{k}, expected "true" or "false", but got #{txt}|]
+                  liftIO exitFailure
 
-  where
-    getDefault k m def = case Map.lookup k m of
-                  Just v -> v
-                  Nothing -> def
-    get k m = case Map.lookup k m of
-                  Just v -> return v
-                  Nothing -> do
-                    $logError [i|SAML: missing configuration entry #{k} for folder ${inst}|]
-                    liftIO exitFailure
-    getBool k m =
-      case Map.lookup k m of
-        Nothing -> return False
-        Just txt ->
-          let v = Text.toLower txt
-          in if | v == "true" -> return True
-                | v == "false" -> return False
-                | otherwise -> do
-                    $logError [i|SAML: Could not parse configuration value for key #{k}, expected "true" or "false", but got #{txt}|]
-                    liftIO exitFailure
-
-getConfigs :: (MonadIO m, MonadLogger m) =>
-              FilePath -> m [(InstanceID, SamlInstanceConfig)]
+getConfigs
+  :: (MonadIO m, MonadLogger m)
+  => FilePath
+  -> m [(InstanceID, SamlInstanceConfig)]
 getConfigs basePath = do
   entries <- liftIO $ Dir.getDirectoryContents basePath
   configs <- Traversable.forM entries $ \dir ->
-    if dir `elem` [".", ".."] then return Nothing
-    else do
-      isDir <- liftIO $ Dir.doesDirectoryExist (basePath </> dir)
-      if isDir then do
-          conf <- getSamlConfig basePath dir
-          return $ Just (samlInstanceConfigThisInstance conf, conf)
-        else return Nothing
+    if dir `elem` [".", ".."]
+      then return Nothing
+      else do
+        isDir <- liftIO $ Dir.doesDirectoryExist (basePath </> dir)
+        if isDir
+          then do
+            conf <- getSamlConfig basePath dir
+            return $ Just (samlInstanceConfigThisInstance conf, conf)
+          else return Nothing
   return $ catMaybes configs
 
-getSAMLConfig :: (MonadLogger m, MonadIO m) =>
-                 Config.Config -> m (Maybe SamlConfig)
+getSAMLConfig
+  :: (MonadLogger m, MonadIO m)
+  => Config.Config
+  -> m (Maybe SamlConfig)
 getSAMLConfig conf = do
-  mbSamlConfPath <- getConfMaybe "SAML_CONFIG_PATH"
-    "saml.configPath" conf
+  mbSamlConfPath <-
+    getConfMaybe
+      "SAML_CONFIG_PATH"
+      "saml.configPath"
+      conf
   case mbSamlConfPath of
     Nothing -> return Nothing
     Just p -> do

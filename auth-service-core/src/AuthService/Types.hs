@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 -- All rights reserved
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -11,42 +12,44 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
 module AuthService.Types where
 
-import           AuthService.OpenAPI.Schema
+import AuthService.OpenAPI.Schema
+import Control.Lens
+import Data.Aeson
+import Data.Aeson.TH
+import Data.ByteString (ByteString)
+import Data.ByteString.Conversion
+import Data.Data
+import qualified Data.OpenApi as OpenApi
+import Data.String
+import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Data.Time.Clock (UTCTime)
+import qualified Data.UUID as UUID
+import GHC.Generics (Generic)
+import Helpers
+import qualified Web.FormUrlEncoded as Form
+import Web.HttpApiData
+import Web.PathPieces
 
-import           Control.Lens
-
-import           Data.Aeson
-import           Data.Aeson.TH
-import           Data.ByteString            ( ByteString )
-import           Data.ByteString.Conversion
-import           Data.Data
-import qualified Data.OpenApi               as OpenApi
-import           Data.String
-import           Data.Text                  ( Text )
-import qualified Data.Text                  as Text
-import qualified Data.Text.Encoding         as Text
-import           Data.Time.Clock            ( UTCTime )
-import qualified Data.UUID                  as UUID
-
-import           GHC.Generics               ( Generic )
-
-import           Helpers
-
-import qualified Web.FormUrlEncoded         as Form
-import           Web.HttpApiData
-import           Web.PathPieces
-
-newtype InstanceID =
-  InstanceID
+newtype InstanceID
+  = InstanceID
   { unInstanceID :: UUID.UUID
   }
-    deriving ( Show, Read, Eq, Ord, Typeable, Data
-             , OpenApi.ToParamSchema , OpenApi.ToSchema)
+  deriving
+    ( Show
+    , Read
+    , Eq
+    , Ord
+    , Typeable
+    , Data
+    , OpenApi.ToParamSchema
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''InstanceID
 
@@ -60,15 +63,22 @@ instance ToHttpApiData InstanceID where
 
 instance FromHttpApiData InstanceID where
   parseUrlPiece txt = case fromPathPiece txt of
-      Nothing -> Left $ "Could not parse user id " <> txt
-      Just uuid -> Right uuid
+    Nothing -> Left $ "Could not parse user id " <> txt
+    Just uuid -> Right uuid
 
-newtype UserID =
-  UserID
+newtype UserID
+  = UserID
   { unUserID :: UUID.UUID
   }
-    deriving ( Show, Read, Eq, Ord, Typeable
-             , OpenApi.ToParamSchema, OpenApi.ToSchema)
+  deriving
+    ( Show
+    , Read
+    , Eq
+    , Ord
+    , Typeable
+    , OpenApi.ToParamSchema
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''UserID
 
@@ -79,8 +89,8 @@ instance FromJSON InstanceID where
   parseJSON v = do
     txt <- parseJSON v
     case UUID.fromText txt of
-        Nothing -> fail $ "Can't parse UUID " <> Text.unpack txt
-        Just uuid -> return $ InstanceID uuid
+      Nothing -> fail $ "Can't parse UUID " <> Text.unpack txt
+      Just uuid -> return $ InstanceID uuid
 
 instance ToByteString InstanceID where
   builder = builder . Text.encodeUtf8 . UUID.toText . unInstanceID
@@ -95,8 +105,8 @@ instance ToHttpApiData UserID where
 
 instance FromHttpApiData UserID where
   parseUrlPiece txt = case fromPathPiece txt of
-      Nothing -> Left $ "Could not parse user id " <> txt
-      Just uuid -> Right uuid
+    Nothing -> Left $ "Could not parse user id " <> txt
+    Just uuid -> Right uuid
 
 instance ToJSON UserID where
   toJSON (UserID uid) = toJSON $ UUID.toText uid
@@ -105,65 +115,125 @@ instance FromJSON UserID where
   parseJSON v = do
     txt <- parseJSON v
     case UUID.fromText txt of
-        Nothing -> fail $ "Can't parse UUID " <> Text.unpack txt
-        Just uuid -> return $ UserID uuid
+      Nothing -> fail $ "Can't parse UUID " <> Text.unpack txt
+      Just uuid -> return $ UserID uuid
 
 instance ToByteString UserID where
   builder = builder . Text.encodeUtf8 . UUID.toText . unUserID
 
-newtype Name =
-  Name
+newtype Name
+  = Name
   { unName :: Text
   }
-    deriving ( Show, Read, Eq, Ord, Typeable, Data, PathPiece, ToJSON, FromJSON
-             , IsString, ToByteString, ToHttpApiData, FromHttpApiData
-             , OpenApi.ToParamSchema, OpenApi.ToSchema )
+  deriving
+    ( Show
+    , Read
+    , Eq
+    , Ord
+    , Typeable
+    , Data
+    , PathPiece
+    , ToJSON
+    , FromJSON
+    , IsString
+    , ToByteString
+    , ToHttpApiData
+    , FromHttpApiData
+    , OpenApi.ToParamSchema
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''Name
 
-newtype Password =
-  Password
+newtype Password
+  = Password
   { unPassword :: Text
   }
-    deriving ( Show, Read, Eq, Ord, Typeable, Data, ToJSON, FromJSON, IsString
-             , ToHttpApiData, FromHttpApiData, OpenApi.ToParamSchema
-             , OpenApi.ToSchema
-             )
+  deriving
+    ( Show
+    , Read
+    , Eq
+    , Ord
+    , Typeable
+    , Data
+    , ToJSON
+    , FromJSON
+    , IsString
+    , ToHttpApiData
+    , FromHttpApiData
+    , OpenApi.ToParamSchema
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''Password
 
-newtype PasswordHash =
-  PasswordHash
+newtype PasswordHash
+  = PasswordHash
   { unPasswordHash :: ByteString
   }
-    deriving ( Show, Eq, Ord, Typeable, Data)
+  deriving (Show, Eq, Ord, Typeable, Data)
 
 makePrisms ''PasswordHash
 
-newtype Email =
-  Email
+newtype Email
+  = Email
   { unEmail :: Text
   }
-    deriving ( Show, Eq, Ord, Typeable, Data, ToJSON, FromJSON, IsString
-             , ToHttpApiData, FromHttpApiData, OpenApi.ToSchema)
+  deriving
+    ( Show
+    , Eq
+    , Ord
+    , Typeable
+    , Data
+    , ToJSON
+    , FromJSON
+    , IsString
+    , ToHttpApiData
+    , FromHttpApiData
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''Email
 
-newtype Phone =
-  Phone
+newtype Phone
+  = Phone
   { unPhone :: Text
   }
-    deriving ( Show, Eq, Ord, Typeable, Data, ToJSON, FromJSON, IsString
-             , ToHttpApiData, FromHttpApiData, OpenApi.ToSchema )
+  deriving
+    ( Show
+    , Eq
+    , Ord
+    , Typeable
+    , Data
+    , ToJSON
+    , FromJSON
+    , IsString
+    , ToHttpApiData
+    , FromHttpApiData
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''Phone
 
-newtype B64Token =
-  B64Token
+newtype B64Token
+  = B64Token
   { unB64Token :: Text
   }
-    deriving ( Show, Read, Eq, Ord, Typeable, Data, PathPiece, ToByteString
-             , ToHttpApiData, FromHttpApiData, ToJSON, FromJSON, OpenApi.ToSchema )
+  deriving
+    ( Show
+    , Read
+    , Eq
+    , Ord
+    , Typeable
+    , Data
+    , PathPiece
+    , ToByteString
+    , ToHttpApiData
+    , FromHttpApiData
+    , ToJSON
+    , FromJSON
+    , OpenApi.ToSchema
+    )
 
 makePrisms ''B64Token
 
@@ -172,174 +242,183 @@ instance OpenApi.ToParamSchema B64Token where
 
 type Role = Text
 
-data AuthHeader =
-  AuthHeader
+data AuthHeader
+  = AuthHeader
   { authHeaderUserID :: Text
-  , authHeaderEmail  :: Email
-  , authHeaderName   :: Name
-  , authHeaderRoles  :: [Role]
+  , authHeaderEmail :: Email
+  , authHeaderName :: Name
+  , authHeaderRoles :: [Role]
   }
-    deriving ( Generic )
-    deriving ( ToJSON, FromJSON, OpenApi.ToSchema ) via (JSONStruct AuthHeader)
+  deriving (Generic)
+  deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct AuthHeader)
 
 makeLensesWith camelCaseFields ''AuthHeader
 
 --------------------------------------------------------------------------------
 -- User
 --------------------------------------------------------------------------------
-data AddUser =
-  AddUser
-  { addUserUuid      :: Maybe UserID
-  , addUserEmail     :: Email
-  , addUserPassword  :: Password
-  , addUserName      :: Name
-  , addUserPhone     :: Maybe Phone
+data AddUser
+  = AddUser
+  { addUserUuid :: Maybe UserID
+  , addUserEmail :: Email
+  , addUserPassword :: Password
+  , addUserName :: Name
+  , addUserPhone :: Maybe Phone
   , addUserInstances :: [InstanceID]
-  , addUserRoles     :: [Text]
+  , addUserRoles :: [Text]
   }
-    deriving ( Show, Generic )
-    deriving ( ToJSON, FromJSON, OpenApi.ToSchema ) via (JSONStruct AddUser)
+  deriving (Show, Generic)
+  deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct AddUser)
 
 makeLensesWith camelCaseFields ''AddUser
 
-data ReturnUser =
-  ReturnUser
-  { returnUserUser  :: Text
+data ReturnUser
+  = ReturnUser
+  { returnUserUser :: Text
   , returnUserRoles :: [Role]
   }
-    deriving ( Show, Eq, Generic )
-    deriving ( ToJSON, FromJSON, OpenApi.ToSchema ) via (JSONStruct ReturnUser)
+  deriving (Show, Eq, Generic)
+  deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct ReturnUser)
 
 makeLensesWith camelCaseFields ''ReturnUser
 
-data ReturnInstance =
-  ReturnInstance
+data ReturnInstance
+  = ReturnInstance
   { returnInstanceName :: Text
-  , returnInstanceId   :: InstanceID
+  , returnInstanceId :: InstanceID
   }
-    deriving (Generic,  Show, Read, Eq, Ord, Typeable, Data )
-    deriving ( ToJSON, FromJSON
-             , OpenApi.ToSchema ) via (JSONStruct ReturnInstance)
+  deriving (Generic, Show, Read, Eq, Ord, Typeable, Data)
+  deriving
+    ( ToJSON
+    , FromJSON
+    , OpenApi.ToSchema
+    )
+    via (JSONStruct ReturnInstance)
 
 makeLensesWith camelCaseFields ''ReturnInstance
 
-data ReturnUserInfo =
-  ReturnUserInfo
-  { returnUserInfoId            :: Text
-  , returnUserInfoEmail         :: Email
-  , returnUserInfoName          :: Name
-  , returnUserInfoPhone         :: Maybe Phone
-  , returnUserInfoInstances     :: [ReturnInstance]
-  , returnUserInfoRoles         :: [Text]
+data ReturnUserInfo
+  = ReturnUserInfo
+  { returnUserInfoId :: Text
+  , returnUserInfoEmail :: Email
+  , returnUserInfoName :: Name
+  , returnUserInfoPhone :: Maybe Phone
+  , returnUserInfoInstances :: [ReturnInstance]
+  , returnUserInfoRoles :: [Text]
   , returnUserInfoDeactivatedAt :: Maybe UTCTime
   }
-    deriving (Generic,  Show )
-    deriving ( ToJSON, FromJSON
-             , OpenApi.ToSchema ) via (JSONStruct ReturnUserInfo)
+  deriving (Generic, Show)
+  deriving
+    ( ToJSON
+    , FromJSON
+    , OpenApi.ToSchema
+    )
+    via (JSONStruct ReturnUserInfo)
 
 makeLensesWith camelCaseFields ''ReturnUserInfo
 
 -- | User info if found
-data FoundUserInfo =
-  FoundUserInfo
-  { foundUserInfoId   :: Text
+data FoundUserInfo
+  = FoundUserInfo
+  { foundUserInfoId :: Text
   , foundUserInfoInfo :: Maybe ReturnUserInfo
   }
-    deriving (Generic,  Show )
-    deriving ( ToJSON, FromJSON
-             , OpenApi.ToSchema ) via (JSONStruct FoundUserInfo)
+  deriving (Generic, Show)
+  deriving
+    ( ToJSON
+    , FromJSON
+    , OpenApi.ToSchema
+    )
+    via (JSONStruct FoundUserInfo)
 
 makeLensesWith camelCaseFields ''FoundUserInfo
 
-data Login =
-  Login
-  { loginUser     :: Email
+data Login
+  = Login
+  { loginUser :: Email
   , loginPassword :: Password
-  , loginOtp      :: Maybe Password
+  , loginOtp :: Maybe Password
   }
-    deriving (Generic,  Show, Eq, Ord, Typeable, Data )
-    deriving ( ToJSON, FromJSON, OpenApi.ToSchema ) via (JSONStruct Login)
+  deriving (Generic, Show, Eq, Ord, Typeable, Data)
+  deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct Login)
 
 makeLensesWith camelCaseFields ''Login
 
-data ReturnLogin =
-  ReturnLogin
-  { returnLoginToken     :: B64Token
+data ReturnLogin
+  = ReturnLogin
+  { returnLoginToken :: B64Token
   , returnLoginInstances :: [ReturnInstance]
   }
-    deriving (Generic,  Show, Read, Eq, Ord, Typeable, Data )
-    deriving ( ToJSON, FromJSON , OpenApi.ToSchema ) via (JSONStruct ReturnLogin)
+  deriving (Generic, Show, Read, Eq, Ord, Typeable, Data)
+  deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct ReturnLogin)
 
 makeLensesWith camelCaseFields ''ReturnLogin
 
-data ChangePassword =
-  ChangePassword
+data ChangePassword
+  = ChangePassword
   { changePasswordOldPassword :: Password
   , changePasswordNewPassword :: Password
-  , changePasswordOtp         :: Maybe Password
+  , changePasswordOtp :: Maybe Password
   }
-    deriving (Generic,  Show, Eq, Ord, Typeable, Data )
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct ChangePassword)
+  deriving (Generic, Show, Eq, Ord, Typeable, Data)
+  deriving (ToJSON, FromJSON, OpenApi.ToSchema) via (JSONStruct ChangePassword)
 
 makeLensesWith camelCaseFields ''ChangePassword
 
 --------------------------------------------------------------------------------
 -- Password Reset
 --------------------------------------------------------------------------------
-newtype PasswordResetRequest =
-  PasswordResetRequest
+newtype PasswordResetRequest
+  = PasswordResetRequest
   { passwordResetRequestEmail :: Email
   }
-    deriving (Generic,  Show )
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct PasswordResetRequest)
+  deriving (Generic, Show)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via (JSONStruct PasswordResetRequest)
 
 makeLensesWith camelCaseFields ''PasswordResetRequest
 
-
-newtype ResetTokenInfo =
-  ResetTokenInfo
+newtype ResetTokenInfo
+  = ResetTokenInfo
   { resetTokenInfoEmail :: Email
   }
-    deriving (Generic,  Show )
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct ResetTokenInfo)
-
+  deriving (Generic, Show)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via (JSONStruct ResetTokenInfo)
 
 makeLensesWith camelCaseFields ''ResetTokenInfo
 
-
-data PasswordReset =
-  PasswordReset
-  { passwordResetToken       :: Text
-  , passwordResetOtp         :: Maybe Password
+data PasswordReset
+  = PasswordReset
+  { passwordResetToken :: Text
+  , passwordResetOtp :: Maybe Password
   , passwordResetNewPassword :: Password
   }
-    deriving (Generic,  Show, Eq)
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct PasswordReset)
-
+  deriving (Generic, Show, Eq)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via (JSONStruct PasswordReset)
 
 makeLensesWith camelCaseFields ''PasswordReset
-
 
 --------------------------------------------------------------------------------
 -- Account Creation
 --------------------------------------------------------------------------------
-data CreateAccount =
-  CreateAccount
-  { createAccountEmail    :: Email
+data CreateAccount
+  = CreateAccount
+  { createAccountEmail :: Email
   , createAccountPassword :: Password
-  , createAccountName     :: Name
-  , createAccountPhone    :: Maybe Phone
+  , createAccountName :: Name
+  , createAccountPhone :: Maybe Phone
   }
-    deriving (Generic,  Show)
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct CreateAccount)
-
+  deriving (Generic, Show)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via (JSONStruct CreateAccount)
 
 makeLensesWith camelCaseFields ''CreateAccount
-
 
 --------------------------------------------------------------------------------
 -- Account Disabling -----------------------------------------------------------
@@ -347,7 +426,7 @@ makeLensesWith camelCaseFields ''CreateAccount
 data DeactivateAt
   = DeactivateNow
   | DeactivateAt UTCTime
-    deriving (Generic,  Show )
+  deriving (Generic, Show)
 
 instance ToJSON DeactivateAt where
   toJSON DeactivateNow = String "now"
@@ -362,52 +441,54 @@ instance OpenApi.ToSchema DeactivateAt where
 
 makePrisms ''DeactivateAt
 
-newtype DeactivateUser =
-  DeactivateUser
+newtype DeactivateUser
+  = DeactivateUser
   { deactivateUserDeactivateAt :: DeactivateAt
   }
-    deriving (Generic,  Show )
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
--- Intentionally inconsistent with the rest of the API for compatibility with
--- previos version
-      via (JSONStructWith 'Underscore DeactivateUser)
-
+  deriving (Generic, Show)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via -- Intentionally inconsistent with the rest of the API for compatibility with
+    -- previos version
+    (JSONStructWith 'Underscore DeactivateUser)
 
 makeLensesWith camelCaseFields ''DeactivateUser
 
 --------------------------------------------------------------------------------
 -- SAML sso --------------------------------------------------------------------
 --------------------------------------------------------------------------------
-newtype SamlLoginRequest =
-  SamlLoginRequest
+newtype SamlLoginRequest
+  = SamlLoginRequest
   { samlLoginRequestLocation :: Text
-  } deriving (Generic)
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct SamlLoginRequest)
-
+  }
+  deriving (Generic)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via (JSONStruct SamlLoginRequest)
 
 makeLensesWith camelCaseFields ''SamlLoginRequest
 
-newtype SsoEnabled =
-  SsoEnabled
+newtype SsoEnabled
+  = SsoEnabled
   { ssoEnabledEnabled :: Bool
   }
-    deriving (Generic)
-    deriving (ToJSON, FromJSON, OpenApi.ToSchema)
-      via (JSONStruct SsoEnabled)
-
+  deriving (Generic)
+  deriving
+    (ToJSON, FromJSON, OpenApi.ToSchema)
+    via (JSONStruct SsoEnabled)
 
 makeLensesWith camelCaseFields ''SsoEnabled
 
-data SamlResponse =
-  SamlResponse
-  { samlResponseBody       :: Text
+data SamlResponse
+  = SamlResponse
+  { samlResponseBody :: Text
   , samlResponseRelayState :: Maybe Text
   }
-    deriving (Show, Generic)
-    deriving (OpenApi.ToSchema) via (JSONStruct SamlResponse)
+  deriving (Show, Generic)
+  deriving (OpenApi.ToSchema) via (JSONStruct SamlResponse)
 
 instance Form.FromForm SamlResponse where
   fromForm f =
-    SamlResponse <$> Form.parseUnique "SAMLResponse" f
-    <*> Form.parseMaybe "RelayState" f
+    SamlResponse
+      <$> Form.parseUnique "SAMLResponse" f
+      <*> Form.parseMaybe "RelayState" f

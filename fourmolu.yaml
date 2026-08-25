@@ -1,0 +1,8 @@
+column-limit: 100
+function-arrows: leading
+haddock-style: single-line
+import-grouping: by-scope
+indentation: 2
+let-style: inline               # ormolu style
+respectful: false
+trailing-section-operators: false

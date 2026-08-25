@@ -1,50 +1,54 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module User where
 
-import qualified Control.Monad.Catch      as Ex
-import           Control.Monad.Trans
-import           Data.Maybe
-import           Data.Text                (Text)
-import qualified Data.Text                as Text
-import           Data.Time                (UTCTime)
-import qualified Data.Time.Format.ISO8601 as ISO8601
-import           Data.UUID                (UUID)
-import qualified Data.UUID                as UUID
-import           System.IO
-
-import           Backend
-import           Monad
-import qualified Persist.Schema           as DB
-import           System.Exit
-import           Types
+import Backend
+import Control.Monad.Catch qualified as Ex
+import Control.Monad.Trans
+import Data.Maybe
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Time (UTCTime)
+import Data.Time.Format.ISO8601 qualified as ISO8601
+import Data.UUID (UUID)
+import Data.UUID qualified as UUID
+import Monad
+import Persist.Schema qualified as DB
+import System.Exit
+import System.IO
+import Types
 
 readTime :: String -> IO UTCTime
 readTime str = case ISO8601.iso8601ParseM str of
-                 Nothing -> do
-                   hPutStrLn stderr $ "could not read time string \"" ++ str
-                                       ++ "\". Is it in ISO8601 format?\n"
-                                       ++ "Example: 2020-08-25T00:00:00Z"
-                   exitFailure
-                 Just time -> return time
+  Nothing -> do
+    hPutStrLn stderr $
+      "could not read time string \""
+        ++ str
+        ++ "\". Is it in ISO8601 format?\n"
+        ++ "Example: 2020-08-25T00:00:00Z"
+    exitFailure
+  Just time -> return time
 
 addUser :: [Text] -> API (Maybe UserID)
 addUser args = do
   case args of
-   (emailAddr : pwd : name' : mbPhone) -> do
-       createUser AddUser{ addUserUuid     = Nothing
-                         , addUserEmail    = Email emailAddr
-                         , addUserPassword = Password pwd
-                         , addUserName     = Name name'
-                         , addUserPhone    = Phone <$> listToMaybe mbPhone
-                         , addUserInstances = []
-                         , addUserRoles = []
-                         }
-   _ -> liftIO $ do
-       hPutStrLn stderr
-           "Usage: auth-service adduser <email> <password> <name> [<phone>]"
-       exitFailure
+    (emailAddr : pwd : name' : mbPhone) -> do
+      createUser
+        AddUser
+          { addUserUuid = Nothing
+          , addUserEmail = Email emailAddr
+          , addUserPassword = Password pwd
+          , addUserName = Name name'
+          , addUserPhone = Phone <$> listToMaybe mbPhone
+          , addUserInstances = []
+          , addUserRoles = []
+          }
+    _ -> liftIO $ do
+      hPutStrLn
+        stderr
+        "Usage: auth-service adduser <email> <password> <name> [<phone>]"
+      exitFailure
 
 removeUser :: [Text] -> API ()
 removeUser args = do
@@ -60,12 +64,12 @@ removeUser args = do
           count <- Backend.removeUser (DB.userUuid uid)
           liftIO $ putStrLn (show count <> " users removed")
     _ -> liftIO $ do
-       hPutStrLn stderr
-           "Usage: auth-service rmuser (<uuid> | email <email>)"
-       exitFailure
+      hPutStrLn
+        stderr
+        "Usage: auth-service rmuser (<uuid> | email <email>)"
+      exitFailure
 
-    -- ["email", email] -> do
-
+-- ["email", email] -> do
 
 addRole :: [String] -> API ()
 addRole args = do
@@ -129,9 +133,9 @@ userRemoveInstance args = do
       if n > 0
         then return ()
         else liftIO $ do
-               hPutStrLn stderr $
-                 "User did not have access to instance " <> Text.unpack inst
-               exitFailure
+          hPutStrLn stderr $
+            "User did not have access to instance " <> Text.unpack inst
+          exitFailure
     _ -> liftIO $ do
       hPutStrLn stderr "Usage: auth-service removeinstance <email> <uuid>"
 
@@ -144,26 +148,25 @@ userDeactivate' [userEmail, deactivateAt] = do
   time <- liftIO $ readTime deactivateAt
   deactivateUser (DB.userUuid usr) (DeactivateAt time)
 userDeactivate' _ = liftIO $ do
-      hPutStrLn stderr "Usage: auth-service deactivateuser <email> [time]"
-      exitFailure
+  hPutStrLn stderr "Usage: auth-service deactivateuser <email> [time]"
+  exitFailure
 
 userReactivate :: [String] -> API ()
 userReactivate [userEmail] = do
   usr <- fetchUser (Email $ Text.pack userEmail)
   reactivateUser (DB.userUuid usr)
 userReactivate _ = liftIO $ do
-      hPutStrLn stderr "Usage: auth-service reactivateuser <email>"
-      exitFailure
-
+  hPutStrLn stderr "Usage: auth-service reactivateuser <email>"
+  exitFailure
 
 fetchUser :: Email -> API DB.User
 fetchUser userEmail = do
   mbUser <- getUserByEmail userEmail
   case mbUser of
-   Nothing -> do
-     liftIO $ hPutStrLn stderr "User not found"
-     liftIO exitFailure
-   Just usr -> return usr
+    Nothing -> do
+      liftIO $ hPutStrLn stderr "User not found"
+      liftIO exitFailure
+    Just usr -> return usr
 
 changePassword :: [String] -> API ()
 changePassword args = do
